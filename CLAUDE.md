@@ -12,7 +12,7 @@ centrifugue/
 │   ├── content.js          # Floating UI on YouTube pages
 │   └── popup/              # Extension popup UI
 ├── native-host/            # Native messaging host (Python)
-│   └── centrifuge_host.py  # Python backend for stem separation
+│   └── centrifugue_host.py  # Python backend for stem separation
 ├── venv-demucs/            # Python venv (created by install.sh)
 ├── specs/                  # Feature specifications (speckit workflow)
 ├── .claude/                # Claude Code configuration
@@ -87,7 +87,7 @@ Follow the project principles defined in `.specify/memory/constitution.md`:
 
 | File | Purpose |
 |------|---------|
-| `native-host/centrifuge_host.py` | Core stem separation logic, native messaging |
+| `native-host/centrifugue_host.py` | Core stem separation logic, native messaging |
 | `extension/background.js` | Progress polling, native messaging bridge |
 | `extension/content.js` | YouTube floating UI, status display |
 | `extension/popup/popup.html` | Extension popup interface |
@@ -100,7 +100,7 @@ Follow the project principles defined in `.specify/memory/constitution.md`:
 The extension communicates with a Python native messaging host:
 1. Extension sends messages via `browser.runtime.sendNativeMessage()`
 2. Native host spawns independent worker subprocess for long-running tasks
-3. Worker writes progress to JSON files (`~/.centrifuge_progress.json`)
+3. Worker writes progress to JSON files (`~/.centrifugue_progress.json`)
 4. Extension polls for progress updates every 2 seconds
 
 ### Important Patterns
