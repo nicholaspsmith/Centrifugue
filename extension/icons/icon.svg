@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Background circle -->
+  <circle cx="48" cy="48" r="44" fill="#FF0000"/>
+
+  <!-- Play triangle (YouTube style) -->
+  <polygon points="38,30 38,66 68,48" fill="white"/>
+
+  <!-- Download arrow overlay -->
+  <g transform="translate(48, 70)">
+    <rect x="-8" y="-14" width="16" height="10" fill="white" rx="2"/>
+    <polygon points="-12,0 12,0 0,10" fill="white"/>
+    <rect x="-14" y="10" width="28" height="3" fill="white" rx="1"/>
+  </g>
+</svg>
