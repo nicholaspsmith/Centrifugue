@@ -33,7 +33,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "centrifuge@nicholassmith.dev",
+      "id": "centrifugue@nicholassmith.dev",
       "strict_min_version": "50.0"
     }
   }
