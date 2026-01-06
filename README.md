@@ -38,8 +38,8 @@ Centrifugue is a Firefox/Zen Browser extension that extracts audio stems (vocals
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/centrifuge.git
-   cd centrifuge
+   git clone https://github.com/yourusername/centrifugue.git
+   cd centrifugue
    ```
 
 2. Run the install script:
