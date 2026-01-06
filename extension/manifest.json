@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "Centrifuge",
+  "name": "Centrifugue",
   "version": "1.0",
   "description": "Extract audio stems from YouTube videos using AI-powered separation (Demucs)",
   "permissions": [
