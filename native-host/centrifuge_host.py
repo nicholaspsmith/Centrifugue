@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Centrifuge - Native messaging host for browser extension.
+Centrifugue - Native messaging host for browser extension.
 Extract audio stems from YouTube videos using yt-dlp and Demucs AI.
 
 Architecture:
