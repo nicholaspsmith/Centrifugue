@@ -102,7 +102,7 @@ centrifugue/
 │   ├── content.js          # Floating UI on YouTube pages
 │   └── popup/              # Extension popup UI
 ├── native-host/            # Native messaging host
-│   └── centrifuge_host.py  # Python backend
+│   └── centrifugue_host.py  # Python backend
 ├── venv-demucs/            # Python venv (created by install.sh)
 └── install.sh              # Installation script
 ```
