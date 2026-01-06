@@ -1,8 +1,14 @@
-# Centrifuge
+<p align="center">
+  <img src="logo.svg" alt="Centrifugue Logo" width="120" height="120">
+</p>
 
-**AI-Powered Audio Stem Separation for YouTube**
+<h1 align="center">Centrifugue</h1>
 
-Centrifuge is a Firefox/Zen Browser extension that extracts audio stems (vocals, drums, bass, other) from YouTube videos using [Demucs](https://github.com/facebookresearch/demucs), a state-of-the-art AI model from Meta.
+<p align="center">
+  <strong>AI-Powered Audio Stem Separation for YouTube</strong>
+</p>
+
+Centrifugue is a Firefox/Zen Browser extension that extracts audio stems (vocals, drums, bass, other) from YouTube videos using [Demucs](https://github.com/facebookresearch/demucs), a state-of-the-art AI model from Meta.
 
 ## Features
 
@@ -89,7 +95,7 @@ You can close the popup or navigate to other videos - processing continues in th
 ## Architecture
 
 ```
-centrifuge/
+centrifugue/
 ├── extension/              # Browser extension
 │   ├── manifest.json       # Extension configuration
 │   ├── background.js       # Native messaging & progress polling
