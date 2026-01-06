@@ -1,5 +1,5 @@
 /**
- * Content script for Centrifuge
+ * Content script for Centrifugue
  * Displays a floating download button and status indicator on YouTube pages
  */
 
@@ -806,4 +806,4 @@ new MutationObserver(() => {
 // Initial setup
 initialize();
 
-console.log("Centrifuge content script loaded");
+console.log("Centrifugue content script loaded");
