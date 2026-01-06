@@ -1,5 +1,5 @@
 /**
- * Popup script for Centrifuge
+ * Popup script for Centrifugue
  * Shows download options and current progress
  */
 
