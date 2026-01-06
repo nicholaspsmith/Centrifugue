@@ -5,7 +5,7 @@ Extract audio stems from YouTube videos using yt-dlp and Demucs AI.
 
 Architecture:
 - Stem separation runs as independent background processes
-- Progress is written to ~/.centrifuge_progress.json for polling
+- Progress is written to ~/.centrifugue_progress.json for polling
 - Extension polls get_progress to check status
 - Supports cancel_job to stop running processes
 """
@@ -94,12 +94,12 @@ def get_download_dir():
 
 def get_progress_file():
     """Get path to the progress tracking file"""
-    return Path.home() / ".centrifuge_progress.json"
+    return Path.home() / ".centrifugue_progress.json"
 
 
 def get_job_file():
     """Get path to the job state file (survives native host restarts)"""
-    return Path.home() / ".centrifuge_job.json"
+    return Path.home() / ".centrifugue_job.json"
 
 
 def write_progress(stage, message, percent=0, estimated_seconds=None, video_title=None,
@@ -416,7 +416,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         return
 
     # Create persistent temp directory (not auto-deleted)
-    temp_dir = tempfile.mkdtemp(prefix='centrifuge_')
+    temp_dir = tempfile.mkdtemp(prefix='centrifugue_')
     temp_path = Path(temp_dir)
     audio_file = temp_path / "audio.wav"
 
