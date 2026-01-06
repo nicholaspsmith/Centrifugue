@@ -1,0 +1,40 @@
+{
+  "manifest_version": 2,
+  "name": "Centrifuge",
+  "version": "1.0",
+  "description": "Extract audio stems from YouTube videos using AI-powered separation (Demucs)",
+  "permissions": [
+    "activeTab",
+    "nativeMessaging",
+    "notifications",
+    "tabs"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "*://*.youtu.be/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_icon": {
+      "48": "icons/icon-48.png"
+    },
+    "default_title": "Download Audio / Stems",
+    "default_popup": "popup/popup.html"
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "centrifuge@nicholassmith.dev",
+      "strict_min_version": "50.0"
+    }
+  }
+}
