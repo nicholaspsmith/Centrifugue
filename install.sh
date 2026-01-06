@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_HOST_DIR="$SCRIPT_DIR/native-host"
-HOST_SCRIPT="$NATIVE_HOST_DIR/centrifuge_host.py"
+HOST_SCRIPT="$NATIVE_HOST_DIR/centrifugue_host.py"
 MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifugue.stemextractor.json"
 VENV_DIR="$SCRIPT_DIR/venv-demucs"
 
@@ -101,7 +101,7 @@ cat > "$MANIFEST_FILE" << EOF
   "description": "Centrifugue native messaging host for audio stem separation",
   "path": "$HOST_SCRIPT",
   "type": "stdio",
-  "allowed_extensions": ["centrifuge@nicholassmith.dev"]
+  "allowed_extensions": ["centrifugue@nicholassmith.dev"]
 }
 EOF
 echo "  Manifest created: $MANIFEST_FILE"
