@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 340px;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+    }
+    h2 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    #status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      background: #f5f5f5;
+      min-height: 20px;
+      white-space: pre-line;
+      line-height: 1.4;
+    }
+    #status.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    #status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    #status.downloading {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 12px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #downloadMp3Btn {
+      background: #ff0000;
+      color: white;
+    }
+    #downloadMp3Btn:hover:not(:disabled) {
+      background: #cc0000;
+    }
+    .stems-section {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 5px;
+    }
+    .stems-section h3 {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    .quality-options {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .quality-option {
+      flex: 1;
+      padding: 8px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .quality-option:hover {
+      border-color: #9c27b0;
+    }
+    .quality-option.selected {
+      border-color: #9c27b0;
+      background: #f3e5f5;
+    }
+    .genre-options {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .genre-option {
+      flex: 1;
+      padding: 8px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .genre-option:hover {
+      border-color: #ff5722;
+    }
+    .genre-option.selected {
+      border-color: #ff5722;
+      background: #fbe9e7;
+    }
+    .genre-option .label {
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+    }
+    .genre-option .desc {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .quality-option .label {
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+    }
+    .quality-option .desc {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+    #downloadStemsBtn {
+      background: #9c27b0;
+      color: white;
+    }
+    #downloadStemsBtn:hover:not(:disabled) {
+      background: #7b1fa2;
+    }
+    #videoTitle {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+    .icon {
+      font-size: 16px;
+    }
+    .hint {
+      font-size: 11px;
+      color: #888;
+      margin-top: 10px;
+      text-align: center;
+    }
+    #cancelBtn {
+      display: none;
+      background: #757575;
+      color: white;
+      margin-top: 10px;
+    }
+    #cancelBtn:hover:not(:disabled) {
+      background: #616161;
+    }
+  </style>
+</head>
+<body>
+  <h2>Centrifuge</h2>
+  <div id="videoTitle"></div>
+  <div id="status">Ready</div>
+  <div class="btn-group">
+    <button id="downloadMp3Btn">
+      <span class="icon">🎵</span>
+      Download MP3
+    </button>
+
+    <div class="stems-section">
+      <h3>Genre Mode</h3>
+      <div class="genre-options">
+        <div class="genre-option selected" data-genre="full">
+          <div class="label">Full</div>
+          <div class="desc">4 stems</div>
+        </div>
+        <div class="genre-option" data-genre="hiphop">
+          <div class="label">Hip Hop</div>
+          <div class="desc">Vocals + Beat</div>
+        </div>
+        <div class="genre-option" data-genre="rock">
+          <div class="label">Rock</div>
+          <div class="desc">Vocals/Drums/Bass</div>
+        </div>
+      </div>
+
+      <h3>Quality</h3>
+      <div class="quality-options">
+        <div class="quality-option selected" data-quality="fast">
+          <div class="label">Fast</div>
+          <div class="desc">~2 min</div>
+        </div>
+        <div class="quality-option" data-quality="balanced">
+          <div class="label">Balanced</div>
+          <div class="desc">~5 min</div>
+        </div>
+        <div class="quality-option" data-quality="high">
+          <div class="label">High</div>
+          <div class="desc">~10 min, less bleed</div>
+        </div>
+      </div>
+      <button id="downloadStemsBtn">
+        <span class="icon">🎛️</span>
+        Download Stems
+      </button>
+    </div>
+    <button id="cancelBtn">
+      <span class="icon">✕</span>
+      Cancel Download
+    </button>
+  </div>
+  <div class="hint">Full: All 4 stems | Hip Hop: Vocals + Beat | Rock: Vocals, Drums, Bass</div>
+  <script src="popup.js"></script>
+</body>
+</html>
