@@ -1,9 +1,9 @@
 /**
- * Background script for Centrifuge
+ * Background script for Centrifugue
  * Handles native messaging and polls for progress updates
  */
 
-const NATIVE_HOST_NAME = "com.centrifuge.stemextractor";
+const NATIVE_HOST_NAME = "com.centrifugue.stemextractor";
 
 // Polling state
 let progressPollInterval = null;
@@ -304,4 +304,4 @@ sendToNativeHost({ action: "get_progress" })
   })
   .catch(() => {});
 
-console.log("Centrifuge background script loaded");
+console.log("Centrifugue background script loaded");
