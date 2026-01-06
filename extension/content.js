@@ -46,12 +46,12 @@ function getVideoTitle() {
 }
 
 function injectStyles() {
-  if (document.getElementById("centrifuge-styles")) return;
+  if (document.getElementById("centrifugue-styles")) return;
 
   const styles = document.createElement("style");
-  styles.id = "centrifuge-styles";
+  styles.id = "centrifugue-styles";
   styles.textContent = `
-    #centrifuge-floating-btn {
+    #centrifugue-floating-btn {
       position: fixed;
       bottom: 80px;
       right: 20px;
@@ -70,24 +70,24 @@ function injectStyles() {
       font-size: 24px;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-    #centrifuge-floating-btn:hover {
+    #centrifugue-floating-btn:hover {
       transform: scale(1.1);
       box-shadow: 0 6px 16px rgba(0,0,0,0.4);
     }
-    #centrifuge-floating-btn.processing {
+    #centrifugue-floating-btn.processing {
       background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
-      animation: centrifuge-pulse 2s ease-in-out infinite;
+      animation: centrifugue-pulse 2s ease-in-out infinite;
     }
-    #centrifuge-floating-btn.hidden {
+    #centrifugue-floating-btn.hidden {
       display: none;
     }
 
-    @keyframes centrifuge-pulse {
+    @keyframes centrifugue-pulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.05); }
     }
 
-    #centrifuge-menu {
+    #centrifugue-menu {
       position: fixed;
       bottom: 150px;
       right: 20px;
@@ -102,34 +102,34 @@ function injectStyles() {
       pointer-events: none;
       overflow: hidden;
     }
-    #centrifuge-menu.visible {
+    #centrifugue-menu.visible {
       opacity: 1;
       transform: translateY(0) scale(1);
       pointer-events: auto;
     }
 
-    .centrifuge-menu-header {
+    .centrifugue-menu-header {
       background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
       padding: 14px 16px;
       color: white;
     }
-    .centrifuge-menu-title {
+    .centrifugue-menu-title {
       font-weight: 600;
       font-size: 14px;
       margin-bottom: 4px;
     }
-    .centrifuge-menu-subtitle {
+    .centrifugue-menu-subtitle {
       font-size: 11px;
       opacity: 0.85;
       line-height: 1.3;
       word-break: break-word;
     }
 
-    .centrifuge-menu-body {
+    .centrifugue-menu-body {
       padding: 16px;
     }
 
-    .centrifuge-menu-btn {
+    .centrifugue-menu-btn {
       width: 100%;
       padding: 12px 16px;
       border: none;
@@ -143,33 +143,33 @@ function injectStyles() {
       transition: background 0.2s;
       margin-bottom: 12px;
     }
-    .centrifuge-menu-btn:disabled {
+    .centrifugue-menu-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    #centrifuge-mp3-btn {
+    #centrifugue-mp3-btn {
       background: #ff0000;
       color: white;
     }
-    #centrifuge-mp3-btn:hover:not(:disabled) {
+    #centrifugue-mp3-btn:hover:not(:disabled) {
       background: #cc0000;
     }
 
-    .centrifuge-section-title {
+    .centrifugue-section-title {
       font-size: 12px;
       color: #888;
       margin-bottom: 8px;
       font-weight: 500;
     }
 
-    .centrifuge-options-row {
+    .centrifugue-options-row {
       display: flex;
       gap: 8px;
       margin-bottom: 12px;
     }
 
-    .centrifuge-option {
+    .centrifugue-option {
       flex: 1;
       padding: 10px 8px;
       border: 2px solid #333;
@@ -180,37 +180,37 @@ function injectStyles() {
       text-align: center;
       transition: all 0.2s;
     }
-    .centrifuge-option:hover {
+    .centrifugue-option:hover {
       border-color: #555;
     }
-    .centrifuge-option.selected {
+    .centrifugue-option.selected {
       border-color: #9c27b0;
       background: rgba(156, 39, 176, 0.2);
     }
-    .centrifuge-genre-option.selected {
+    .centrifugue-genre-option.selected {
       border-color: #ff5722;
       background: rgba(255, 87, 34, 0.2);
     }
-    .centrifuge-option-label {
+    .centrifugue-option-label {
       font-weight: 600;
       font-size: 12px;
     }
-    .centrifuge-option-desc {
+    .centrifugue-option-desc {
       font-size: 10px;
       color: #888;
       margin-top: 2px;
     }
 
-    #centrifuge-stems-btn {
+    #centrifugue-stems-btn {
       background: #9c27b0;
       color: white;
       margin-bottom: 0;
     }
-    #centrifuge-stems-btn:hover:not(:disabled) {
+    #centrifugue-stems-btn:hover:not(:disabled) {
       background: #7b1fa2;
     }
 
-    .centrifuge-menu-close {
+    .centrifugue-menu-close {
       position: absolute;
       top: 10px;
       right: 10px;
@@ -222,11 +222,11 @@ function injectStyles() {
       padding: 4px 8px;
       line-height: 1;
     }
-    .centrifuge-menu-close:hover {
+    .centrifugue-menu-close:hover {
       color: #fff;
     }
 
-    #centrifuge-status {
+    #centrifugue-status {
       position: fixed;
       bottom: 20px;
       right: 20px;
@@ -246,38 +246,38 @@ function injectStyles() {
       transition: opacity 0.3s, transform 0.3s;
       max-width: 350px;
     }
-    #centrifuge-status.visible {
+    #centrifugue-status.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    #centrifuge-status.downloading {
+    #centrifugue-status.downloading {
       background: #1565c0;
     }
-    #centrifuge-status.success {
+    #centrifugue-status.success {
       background: #2e7d32;
     }
-    #centrifuge-status.error {
+    #centrifugue-status.error {
       background: #c62828;
     }
-    .centrifuge-status-icon {
+    .centrifugue-status-icon {
       width: 20px;
       height: 20px;
       border-radius: 50%;
       flex-shrink: 0;
     }
-    #centrifuge-status.downloading .centrifuge-status-icon {
+    #centrifugue-status.downloading .centrifugue-status-icon {
       border: 2px solid rgba(255,255,255,0.3);
       border-top-color: #fff;
-      animation: centrifuge-spin 1s linear infinite;
+      animation: centrifugue-spin 1s linear infinite;
     }
-    #centrifuge-status.success .centrifuge-status-icon::after {
+    #centrifugue-status.success .centrifugue-status-icon::after {
       content: "\\2713";
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
     }
-    #centrifuge-status.error .centrifuge-status-icon::after {
+    #centrifugue-status.error .centrifugue-status-icon::after {
       content: "!";
       display: flex;
       align-items: center;
@@ -285,12 +285,12 @@ function injectStyles() {
       font-size: 14px;
       font-weight: bold;
     }
-    .centrifuge-status-text {
+    .centrifugue-status-text {
       flex: 1;
       line-height: 1.4;
       white-space: pre-line;
     }
-    .centrifuge-status-close {
+    .centrifugue-status-close {
       background: none;
       border: none;
       color: rgba(255,255,255,0.7);
@@ -299,43 +299,43 @@ function injectStyles() {
       padding: 0 0 0 8px;
       line-height: 1;
     }
-    .centrifuge-status-close:hover {
+    .centrifugue-status-close:hover {
       color: #fff;
     }
-    @keyframes centrifuge-spin {
+    @keyframes centrifugue-spin {
       to { transform: rotate(360deg); }
     }
 
-    .centrifuge-progress-section {
+    .centrifugue-progress-section {
       background: #222;
       border-radius: 8px;
       padding: 12px;
       margin-bottom: 12px;
     }
-    .centrifuge-progress-title {
+    .centrifugue-progress-title {
       font-size: 12px;
       color: #fff;
       margin-bottom: 8px;
       word-break: break-word;
     }
-    .centrifuge-progress-bar-container {
+    .centrifugue-progress-bar-container {
       height: 6px;
       background: #333;
       border-radius: 3px;
       overflow: hidden;
       margin-bottom: 6px;
     }
-    .centrifuge-progress-bar {
+    .centrifugue-progress-bar {
       height: 100%;
       background: linear-gradient(90deg, #1565c0, #42a5f5);
       border-radius: 3px;
       transition: width 0.3s ease;
     }
-    .centrifuge-progress-text {
+    .centrifugue-progress-text {
       font-size: 11px;
       color: #888;
     }
-    #centrifuge-cancel-btn {
+    #centrifugue-cancel-btn {
       width: 100%;
       padding: 10px;
       background: #444;
@@ -346,7 +346,7 @@ function injectStyles() {
       font-size: 13px;
       margin-top: 8px;
     }
-    #centrifuge-cancel-btn:hover {
+    #centrifugue-cancel-btn:hover {
       background: #555;
     }
   `;
@@ -359,7 +359,7 @@ function createFloatingButton() {
   injectStyles();
 
   floatingButton = document.createElement("button");
-  floatingButton.id = "centrifuge-floating-btn";
+  floatingButton.id = "centrifugue-floating-btn";
   floatingButton.innerHTML = "🎵";
   floatingButton.title = "Download Audio";
 
@@ -373,68 +373,68 @@ function createMenu() {
   if (menuElement) return menuElement;
 
   menuElement = document.createElement("div");
-  menuElement.id = "centrifuge-menu";
+  menuElement.id = "centrifugue-menu";
 
   const videoTitle = getVideoTitle();
   const shortTitle = videoTitle.length > 50 ? videoTitle.substring(0, 47) + "..." : videoTitle;
 
   menuElement.innerHTML = `
-    <div class="centrifuge-menu-header">
-      <button class="centrifuge-menu-close">\u00D7</button>
-      <div class="centrifuge-menu-title">Download Audio</div>
-      <div class="centrifuge-menu-subtitle">${shortTitle}</div>
+    <div class="centrifugue-menu-header">
+      <button class="centrifugue-menu-close">\u00D7</button>
+      <div class="centrifugue-menu-title">Download Audio</div>
+      <div class="centrifugue-menu-subtitle">${shortTitle}</div>
     </div>
-    <div class="centrifuge-menu-body">
-      <div id="centrifuge-progress-container" style="display: none;">
-        <div class="centrifuge-progress-section">
-          <div class="centrifuge-progress-title" id="centrifuge-progress-title">Processing...</div>
-          <div class="centrifuge-progress-bar-container">
-            <div class="centrifuge-progress-bar" id="centrifuge-progress-bar" style="width: 0%"></div>
+    <div class="centrifugue-menu-body">
+      <div id="centrifugue-progress-container" style="display: none;">
+        <div class="centrifugue-progress-section">
+          <div class="centrifugue-progress-title" id="centrifugue-progress-title">Processing...</div>
+          <div class="centrifugue-progress-bar-container">
+            <div class="centrifugue-progress-bar" id="centrifugue-progress-bar" style="width: 0%"></div>
           </div>
-          <div class="centrifuge-progress-text" id="centrifuge-progress-text">Starting...</div>
+          <div class="centrifugue-progress-text" id="centrifugue-progress-text">Starting...</div>
         </div>
-        <button id="centrifuge-cancel-btn">Cancel</button>
+        <button id="centrifugue-cancel-btn">Cancel</button>
       </div>
 
-      <div id="centrifuge-download-options">
-        <button class="centrifuge-menu-btn" id="centrifuge-mp3-btn">
+      <div id="centrifugue-download-options">
+        <button class="centrifugue-menu-btn" id="centrifugue-mp3-btn">
           <span>🎵</span>
           Download MP3
         </button>
 
-        <div class="centrifuge-section-title">Genre Mode</div>
-        <div class="centrifuge-options-row">
-          <div class="centrifuge-option centrifuge-genre-option selected" data-genre="full">
-            <div class="centrifuge-option-label">Full</div>
-            <div class="centrifuge-option-desc">4 stems</div>
+        <div class="centrifugue-section-title">Genre Mode</div>
+        <div class="centrifugue-options-row">
+          <div class="centrifugue-option centrifugue-genre-option selected" data-genre="full">
+            <div class="centrifugue-option-label">Full</div>
+            <div class="centrifugue-option-desc">4 stems</div>
           </div>
-          <div class="centrifuge-option centrifuge-genre-option" data-genre="hiphop">
-            <div class="centrifuge-option-label">Hip Hop</div>
-            <div class="centrifuge-option-desc">Vocals + Beat</div>
+          <div class="centrifugue-option centrifugue-genre-option" data-genre="hiphop">
+            <div class="centrifugue-option-label">Hip Hop</div>
+            <div class="centrifugue-option-desc">Vocals + Beat</div>
           </div>
-          <div class="centrifuge-option centrifuge-genre-option" data-genre="rock">
-            <div class="centrifuge-option-label">Rock</div>
-            <div class="centrifuge-option-desc">Vox/Drums/Bass</div>
-          </div>
-        </div>
-
-        <div class="centrifuge-section-title">Quality</div>
-        <div class="centrifuge-options-row">
-          <div class="centrifuge-option centrifuge-quality-option selected" data-quality="fast">
-            <div class="centrifuge-option-label">Fast</div>
-            <div class="centrifuge-option-desc">~2 min</div>
-          </div>
-          <div class="centrifuge-option centrifuge-quality-option" data-quality="balanced">
-            <div class="centrifuge-option-label">Balanced</div>
-            <div class="centrifuge-option-desc">~5 min</div>
-          </div>
-          <div class="centrifuge-option centrifuge-quality-option" data-quality="high">
-            <div class="centrifuge-option-label">High</div>
-            <div class="centrifuge-option-desc">~10 min</div>
+          <div class="centrifugue-option centrifugue-genre-option" data-genre="rock">
+            <div class="centrifugue-option-label">Rock</div>
+            <div class="centrifugue-option-desc">Vox/Drums/Bass</div>
           </div>
         </div>
 
-        <button class="centrifuge-menu-btn" id="centrifuge-stems-btn">
+        <div class="centrifugue-section-title">Quality</div>
+        <div class="centrifugue-options-row">
+          <div class="centrifugue-option centrifugue-quality-option selected" data-quality="fast">
+            <div class="centrifugue-option-label">Fast</div>
+            <div class="centrifugue-option-desc">~2 min</div>
+          </div>
+          <div class="centrifugue-option centrifugue-quality-option" data-quality="balanced">
+            <div class="centrifugue-option-label">Balanced</div>
+            <div class="centrifugue-option-desc">~5 min</div>
+          </div>
+          <div class="centrifugue-option centrifugue-quality-option" data-quality="high">
+            <div class="centrifugue-option-label">High</div>
+            <div class="centrifugue-option-desc">~10 min</div>
+          </div>
+        </div>
+
+        <button class="centrifugue-menu-btn" id="centrifugue-stems-btn">
           <span>🎛️</span>
           Download Stems
         </button>
@@ -443,24 +443,24 @@ function createMenu() {
   `;
 
   // Event listeners
-  menuElement.querySelector(".centrifuge-menu-close").addEventListener("click", closeMenu);
-  menuElement.querySelector("#centrifuge-mp3-btn").addEventListener("click", downloadMP3);
-  menuElement.querySelector("#centrifuge-stems-btn").addEventListener("click", downloadStems);
-  menuElement.querySelector("#centrifuge-cancel-btn").addEventListener("click", cancelJob);
+  menuElement.querySelector(".centrifugue-menu-close").addEventListener("click", closeMenu);
+  menuElement.querySelector("#centrifugue-mp3-btn").addEventListener("click", downloadMP3);
+  menuElement.querySelector("#centrifugue-stems-btn").addEventListener("click", downloadStems);
+  menuElement.querySelector("#centrifugue-cancel-btn").addEventListener("click", cancelJob);
 
   // Genre options
-  menuElement.querySelectorAll(".centrifuge-genre-option").forEach(option => {
+  menuElement.querySelectorAll(".centrifugue-genre-option").forEach(option => {
     option.addEventListener("click", () => {
-      menuElement.querySelectorAll(".centrifuge-genre-option").forEach(o => o.classList.remove("selected"));
+      menuElement.querySelectorAll(".centrifugue-genre-option").forEach(o => o.classList.remove("selected"));
       option.classList.add("selected");
       selectedGenre = option.dataset.genre;
     });
   });
 
   // Quality options
-  menuElement.querySelectorAll(".centrifuge-quality-option").forEach(option => {
+  menuElement.querySelectorAll(".centrifugue-quality-option").forEach(option => {
     option.addEventListener("click", () => {
-      menuElement.querySelectorAll(".centrifuge-quality-option").forEach(o => o.classList.remove("selected"));
+      menuElement.querySelectorAll(".centrifugue-quality-option").forEach(o => o.classList.remove("selected"));
       option.classList.add("selected");
       selectedQuality = option.dataset.quality;
     });
@@ -495,7 +495,7 @@ function openMenu() {
   // Update video title
   const videoTitle = getVideoTitle();
   const shortTitle = videoTitle.length > 50 ? videoTitle.substring(0, 47) + "..." : videoTitle;
-  menuElement.querySelector(".centrifuge-menu-subtitle").textContent = shortTitle;
+  menuElement.querySelector(".centrifugue-menu-subtitle").textContent = shortTitle;
 
   // Check for active job
   checkActiveJob();
@@ -528,11 +528,11 @@ async function checkActiveJob() {
 function showProgressInMenu(progress) {
   if (!menuElement) return;
 
-  const progressContainer = menuElement.querySelector("#centrifuge-progress-container");
-  const downloadOptions = menuElement.querySelector("#centrifuge-download-options");
-  const progressTitle = menuElement.querySelector("#centrifuge-progress-title");
-  const progressBar = menuElement.querySelector("#centrifuge-progress-bar");
-  const progressText = menuElement.querySelector("#centrifuge-progress-text");
+  const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
+  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
+  const progressTitle = menuElement.querySelector("#centrifugue-progress-title");
+  const progressBar = menuElement.querySelector("#centrifugue-progress-bar");
+  const progressText = menuElement.querySelector("#centrifugue-progress-text");
 
   progressContainer.style.display = "block";
   downloadOptions.style.display = "none";
@@ -570,8 +570,8 @@ function showProgressInMenu(progress) {
 function hideProgressInMenu() {
   if (!menuElement) return;
 
-  const progressContainer = menuElement.querySelector("#centrifuge-progress-container");
-  const downloadOptions = menuElement.querySelector("#centrifuge-download-options");
+  const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
+  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
 
   if (progressContainer) progressContainer.style.display = "none";
   if (downloadOptions) downloadOptions.style.display = "block";
@@ -586,8 +586,8 @@ function hideProgressInMenu() {
 function setButtonsDisabled(disabled) {
   if (!menuElement) return;
 
-  const mp3Btn = menuElement.querySelector("#centrifuge-mp3-btn");
-  const stemsBtn = menuElement.querySelector("#centrifuge-stems-btn");
+  const mp3Btn = menuElement.querySelector("#centrifugue-mp3-btn");
+  const stemsBtn = menuElement.querySelector("#centrifugue-stems-btn");
 
   if (mp3Btn) mp3Btn.disabled = disabled;
   if (stemsBtn) stemsBtn.disabled = disabled;
@@ -678,17 +678,17 @@ function createStatusElement() {
   if (statusElement) return statusElement;
 
   statusElement = document.createElement("div");
-  statusElement.id = "centrifuge-status";
+  statusElement.id = "centrifugue-status";
 
   const iconEl = document.createElement("div");
-  iconEl.className = "centrifuge-status-icon";
+  iconEl.className = "centrifugue-status-icon";
 
   const textEl = document.createElement("div");
-  textEl.className = "centrifuge-status-text";
+  textEl.className = "centrifugue-status-text";
   textEl.textContent = "Ready";
 
   const closeBtn = document.createElement("button");
-  closeBtn.className = "centrifuge-status-close";
+  closeBtn.className = "centrifugue-status-close";
   closeBtn.textContent = "\u00D7";
   closeBtn.addEventListener("click", hideStatus);
 
@@ -709,7 +709,7 @@ function showStatus(message, type = "downloading", autoHide = false) {
   }
 
   el.className = `visible ${type}`;
-  el.querySelector(".centrifuge-status-text").textContent = message;
+  el.querySelector(".centrifugue-status-text").textContent = message;
 
   if (autoHide && (type === "success" || type === "error" || type === "idle")) {
     hideTimeout = setTimeout(hideStatus, 5000);
