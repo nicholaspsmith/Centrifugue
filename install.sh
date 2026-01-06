@@ -1,5 +1,5 @@
 #!/bin/bash
-# Centrifuge Installation Script
+# Centrifugue Installation Script
 # Sets up the browser extension and native messaging host for stem separation
 
 set -e
@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_HOST_DIR="$SCRIPT_DIR/native-host"
 HOST_SCRIPT="$NATIVE_HOST_DIR/centrifuge_host.py"
-MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifuge.stemextractor.json"
+MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifugue.stemextractor.json"
 VENV_DIR="$SCRIPT_DIR/venv-demucs"
 
 # Native messaging hosts directories
@@ -15,7 +15,7 @@ FIREFOX_NATIVE_DIR="$HOME/Library/Application Support/Mozilla/NativeMessagingHos
 ZEN_NATIVE_DIR="$HOME/Library/Application Support/zen/NativeMessagingHosts"
 
 echo "=========================================="
-echo "  Centrifuge Installation"
+echo "  Centrifugue Installation"
 echo "  AI-Powered Audio Stem Separation"
 echo "=========================================="
 echo
@@ -97,8 +97,8 @@ echo
 echo "Configuring native messaging host..."
 cat > "$MANIFEST_FILE" << EOF
 {
-  "name": "com.centrifuge.stemextractor",
-  "description": "Centrifuge native messaging host for audio stem separation",
+  "name": "com.centrifugue.stemextractor",
+  "description": "Centrifugue native messaging host for audio stem separation",
   "path": "$HOST_SCRIPT",
   "type": "stdio",
   "allowed_extensions": ["centrifuge@nicholassmith.dev"]
@@ -113,11 +113,11 @@ chmod +x "$HOST_SCRIPT"
 echo "Installing for browsers..."
 
 mkdir -p "$FIREFOX_NATIVE_DIR"
-ln -sf "$MANIFEST_FILE" "$FIREFOX_NATIVE_DIR/com.centrifuge.stemextractor.json"
+ln -sf "$MANIFEST_FILE" "$FIREFOX_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Firefox: $FIREFOX_NATIVE_DIR"
 
 mkdir -p "$ZEN_NATIVE_DIR"
-ln -sf "$MANIFEST_FILE" "$ZEN_NATIVE_DIR/com.centrifuge.stemextractor.json"
+ln -sf "$MANIFEST_FILE" "$ZEN_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Zen Browser: $ZEN_NATIVE_DIR"
 
 echo
@@ -125,7 +125,7 @@ echo "=========================================="
 echo "  Installation Complete!"
 echo "=========================================="
 echo
-echo "To use Centrifuge:"
+echo "To use Centrifugue:"
 echo
 echo "1. Open Firefox or Zen Browser"
 echo "2. Go to: about:debugging#/runtime/this-firefox"
