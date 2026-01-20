@@ -1,0 +1,901 @@
+/**
+ * Content script for Centrifugue (Chrome)
+ * Displays a floating download button and status indicator on YouTube pages
+ */
+
+let floatingButton = null;
+let menuElement = null;
+let statusElement = null;
+let hideTimeout = null;
+let selectedQuality = "fast";
+let selectedGenre = "full";
+let isMenuOpen = false;
+let currentVideoUrl = null;
+
+// Check if we're on a YouTube video page
+function isVideoPage() {
+  return window.location.pathname === "/watch" &&
+         new URLSearchParams(window.location.search).has("v");
+}
+
+function getCurrentVideoUrl() {
+  if (isVideoPage()) {
+    return window.location.href;
+  }
+  return null;
+}
+
+function getVideoTitle() {
+  // Try different selectors for YouTube's video title
+  const selectors = [
+    "h1.ytd-video-primary-info-renderer yt-formatted-string",
+    "h1.title yt-formatted-string",
+    "#title h1 yt-formatted-string",
+    "h1.ytd-watch-metadata yt-formatted-string"
+  ];
+
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el && el.textContent) {
+      return el.textContent.trim();
+    }
+  }
+
+  // Fallback to document title
+  return document.title.replace(" - YouTube", "").trim();
+}
+
+function injectStyles() {
+  if (document.getElementById("centrifugue-styles")) return;
+
+  const styles = document.createElement("style");
+  styles.id = "centrifugue-styles";
+  styles.textContent = `
+    #centrifugue-floating-btn {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+      color: white;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #centrifugue-floating-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+    }
+    #centrifugue-floating-btn.processing {
+      background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+      animation: centrifugue-pulse 2s ease-in-out infinite;
+    }
+    #centrifugue-floating-btn.hidden {
+      display: none;
+    }
+
+    @keyframes centrifugue-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    #centrifugue-menu {
+      position: fixed;
+      bottom: 150px;
+      right: 20px;
+      width: 320px;
+      background: #1a1a1a;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #centrifugue-menu.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .centrifugue-menu-header {
+      background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+      padding: 14px 16px;
+      color: white;
+    }
+    .centrifugue-menu-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .centrifugue-menu-subtitle {
+      font-size: 11px;
+      opacity: 0.85;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .centrifugue-menu-body {
+      padding: 16px;
+    }
+
+    .centrifugue-menu-btn {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.2s;
+      margin-bottom: 12px;
+    }
+    .centrifugue-menu-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #centrifugue-mp3-btn {
+      background: #ff0000;
+      color: white;
+    }
+    #centrifugue-mp3-btn:hover:not(:disabled) {
+      background: #cc0000;
+    }
+
+    .centrifugue-section-title {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .centrifugue-options-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .centrifugue-option {
+      flex: 1;
+      padding: 10px 8px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .centrifugue-option:hover {
+      border-color: #555;
+    }
+    .centrifugue-option.selected {
+      border-color: #9c27b0;
+      background: rgba(156, 39, 176, 0.2);
+    }
+    .centrifugue-genre-option.selected {
+      border-color: #ff5722;
+      background: rgba(255, 87, 34, 0.2);
+    }
+    .centrifugue-option-label {
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .centrifugue-option-desc {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    #centrifugue-stems-btn {
+      background: #9c27b0;
+      color: white;
+      margin-bottom: 0;
+    }
+    #centrifugue-stems-btn:hover:not(:disabled) {
+      background: #7b1fa2;
+    }
+
+    .centrifugue-menu-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.7);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+    .centrifugue-menu-close:hover {
+      color: #fff;
+    }
+
+    #centrifugue-status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 9997;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s, transform 0.3s;
+      max-width: 350px;
+    }
+    #centrifugue-status.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #centrifugue-status.downloading {
+      background: #1565c0;
+    }
+    #centrifugue-status.success {
+      background: #2e7d32;
+    }
+    #centrifugue-status.error {
+      background: #c62828;
+    }
+    .centrifugue-status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #centrifugue-status.downloading .centrifugue-status-icon {
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      animation: centrifugue-spin 1s linear infinite;
+    }
+    #centrifugue-status.success .centrifugue-status-icon::after {
+      content: "\\2713";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    #centrifugue-status.error .centrifugue-status-icon::after {
+      content: "!";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .centrifugue-status-text {
+      flex: 1;
+      line-height: 1.4;
+      white-space: pre-line;
+    }
+    .centrifugue-status-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.7);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 0 0 8px;
+      line-height: 1;
+    }
+    .centrifugue-status-close:hover {
+      color: #fff;
+    }
+    @keyframes centrifugue-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .centrifugue-progress-section {
+      background: #222;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .centrifugue-progress-title {
+      font-size: 12px;
+      color: #fff;
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+    .centrifugue-progress-bar-container {
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .centrifugue-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #1565c0, #42a5f5);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .centrifugue-progress-text {
+      font-size: 11px;
+      color: #888;
+    }
+    #centrifugue-cancel-btn {
+      width: 100%;
+      padding: 10px;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    #centrifugue-cancel-btn:hover {
+      background: #555;
+    }
+  `;
+  document.head.appendChild(styles);
+}
+
+function createFloatingButton() {
+  if (floatingButton) return floatingButton;
+
+  injectStyles();
+
+  floatingButton = document.createElement("button");
+  floatingButton.id = "centrifugue-floating-btn";
+  floatingButton.textContent = "🎵";
+  floatingButton.title = "Download Audio";
+
+  floatingButton.addEventListener("click", toggleMenu);
+
+  document.body.appendChild(floatingButton);
+  return floatingButton;
+}
+
+function createMenu() {
+  if (menuElement) return menuElement;
+
+  menuElement = document.createElement("div");
+  menuElement.id = "centrifugue-menu";
+
+  const videoTitle = getVideoTitle();
+  const shortTitle = videoTitle.length > 50 ? videoTitle.substring(0, 47) + "..." : videoTitle;
+
+  // Build menu using DOM methods instead of innerHTML for security
+  const header = document.createElement("div");
+  header.className = "centrifugue-menu-header";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "centrifugue-menu-close";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", closeMenu);
+
+  const title = document.createElement("div");
+  title.className = "centrifugue-menu-title";
+  title.textContent = "Download Audio";
+
+  const subtitle = document.createElement("div");
+  subtitle.className = "centrifugue-menu-subtitle";
+  subtitle.textContent = shortTitle;
+
+  header.appendChild(closeBtn);
+  header.appendChild(title);
+  header.appendChild(subtitle);
+
+  const body = document.createElement("div");
+  body.className = "centrifugue-menu-body";
+
+  // Progress container
+  const progressContainer = document.createElement("div");
+  progressContainer.id = "centrifugue-progress-container";
+  progressContainer.style.display = "none";
+
+  const progressSection = document.createElement("div");
+  progressSection.className = "centrifugue-progress-section";
+
+  const progressTitle = document.createElement("div");
+  progressTitle.className = "centrifugue-progress-title";
+  progressTitle.id = "centrifugue-progress-title";
+  progressTitle.textContent = "Processing...";
+
+  const progressBarContainer = document.createElement("div");
+  progressBarContainer.className = "centrifugue-progress-bar-container";
+
+  const progressBar = document.createElement("div");
+  progressBar.className = "centrifugue-progress-bar";
+  progressBar.id = "centrifugue-progress-bar";
+  progressBar.style.width = "0%";
+
+  const progressText = document.createElement("div");
+  progressText.className = "centrifugue-progress-text";
+  progressText.id = "centrifugue-progress-text";
+  progressText.textContent = "Starting...";
+
+  progressBarContainer.appendChild(progressBar);
+  progressSection.appendChild(progressTitle);
+  progressSection.appendChild(progressBarContainer);
+  progressSection.appendChild(progressText);
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.id = "centrifugue-cancel-btn";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", cancelJob);
+
+  progressContainer.appendChild(progressSection);
+  progressContainer.appendChild(cancelBtn);
+
+  // Download options
+  const downloadOptions = document.createElement("div");
+  downloadOptions.id = "centrifugue-download-options";
+
+  // MP3 button
+  const mp3Btn = document.createElement("button");
+  mp3Btn.className = "centrifugue-menu-btn";
+  mp3Btn.id = "centrifugue-mp3-btn";
+  const mp3Icon = document.createElement("span");
+  mp3Icon.textContent = "🎵";
+  mp3Btn.appendChild(mp3Icon);
+  mp3Btn.appendChild(document.createTextNode(" Download MP3"));
+  mp3Btn.addEventListener("click", downloadMP3);
+
+  // Genre section
+  const genreTitle = document.createElement("div");
+  genreTitle.className = "centrifugue-section-title";
+  genreTitle.textContent = "Genre Mode";
+
+  const genreRow = document.createElement("div");
+  genreRow.className = "centrifugue-options-row";
+
+  const genres = [
+    { value: "full", label: "Full", desc: "4 stems", selected: true },
+    { value: "hiphop", label: "Hip Hop", desc: "Vocals + Beat", selected: false },
+    { value: "rock", label: "Rock", desc: "Vox/Drums/Bass", selected: false }
+  ];
+
+  genres.forEach(g => {
+    const opt = document.createElement("div");
+    opt.className = "centrifugue-option centrifugue-genre-option" + (g.selected ? " selected" : "");
+    opt.dataset.genre = g.value;
+
+    const label = document.createElement("div");
+    label.className = "centrifugue-option-label";
+    label.textContent = g.label;
+
+    const desc = document.createElement("div");
+    desc.className = "centrifugue-option-desc";
+    desc.textContent = g.desc;
+
+    opt.appendChild(label);
+    opt.appendChild(desc);
+    opt.addEventListener("click", () => {
+      genreRow.querySelectorAll(".centrifugue-genre-option").forEach(o => o.classList.remove("selected"));
+      opt.classList.add("selected");
+      selectedGenre = opt.dataset.genre;
+    });
+    genreRow.appendChild(opt);
+  });
+
+  // Quality section
+  const qualityTitle = document.createElement("div");
+  qualityTitle.className = "centrifugue-section-title";
+  qualityTitle.textContent = "Quality";
+
+  const qualityRow = document.createElement("div");
+  qualityRow.className = "centrifugue-options-row";
+
+  const qualities = [
+    { value: "fast", label: "Fast", desc: "~2 min", selected: true },
+    { value: "balanced", label: "Balanced", desc: "~5 min", selected: false },
+    { value: "high", label: "High", desc: "~10 min", selected: false }
+  ];
+
+  qualities.forEach(q => {
+    const opt = document.createElement("div");
+    opt.className = "centrifugue-option centrifugue-quality-option" + (q.selected ? " selected" : "");
+    opt.dataset.quality = q.value;
+
+    const label = document.createElement("div");
+    label.className = "centrifugue-option-label";
+    label.textContent = q.label;
+
+    const desc = document.createElement("div");
+    desc.className = "centrifugue-option-desc";
+    desc.textContent = q.desc;
+
+    opt.appendChild(label);
+    opt.appendChild(desc);
+    opt.addEventListener("click", () => {
+      qualityRow.querySelectorAll(".centrifugue-quality-option").forEach(o => o.classList.remove("selected"));
+      opt.classList.add("selected");
+      selectedQuality = opt.dataset.quality;
+    });
+    qualityRow.appendChild(opt);
+  });
+
+  // Stems button
+  const stemsBtn = document.createElement("button");
+  stemsBtn.className = "centrifugue-menu-btn";
+  stemsBtn.id = "centrifugue-stems-btn";
+  const stemsIcon = document.createElement("span");
+  stemsIcon.textContent = "🎛️";
+  stemsBtn.appendChild(stemsIcon);
+  stemsBtn.appendChild(document.createTextNode(" Download Stems"));
+  stemsBtn.addEventListener("click", downloadStems);
+
+  downloadOptions.appendChild(mp3Btn);
+  downloadOptions.appendChild(genreTitle);
+  downloadOptions.appendChild(genreRow);
+  downloadOptions.appendChild(qualityTitle);
+  downloadOptions.appendChild(qualityRow);
+  downloadOptions.appendChild(stemsBtn);
+
+  body.appendChild(progressContainer);
+  body.appendChild(downloadOptions);
+
+  menuElement.appendChild(header);
+  menuElement.appendChild(body);
+
+  // Close menu when clicking outside
+  document.addEventListener("click", (e) => {
+    if (isMenuOpen && !menuElement.contains(e.target) && e.target !== floatingButton) {
+      closeMenu();
+    }
+  });
+
+  document.body.appendChild(menuElement);
+  return menuElement;
+}
+
+function toggleMenu() {
+  if (!menuElement) {
+    createMenu();
+  }
+
+  if (isMenuOpen) {
+    closeMenu();
+  } else {
+    openMenu();
+  }
+}
+
+function openMenu() {
+  if (!menuElement) createMenu();
+
+  // Update video title
+  const videoTitle = getVideoTitle();
+  const shortTitle = videoTitle.length > 50 ? videoTitle.substring(0, 47) + "..." : videoTitle;
+  menuElement.querySelector(".centrifugue-menu-subtitle").textContent = shortTitle;
+
+  // Check for active job
+  checkActiveJob();
+
+  menuElement.classList.add("visible");
+  isMenuOpen = true;
+}
+
+function closeMenu() {
+  if (menuElement) {
+    menuElement.classList.remove("visible");
+  }
+  isMenuOpen = false;
+}
+
+async function checkActiveJob() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "get_progress" });
+
+    if (response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
+      showProgressInMenu(response);
+    } else {
+      hideProgressInMenu();
+    }
+  } catch (error) {
+    hideProgressInMenu();
+  }
+}
+
+function showProgressInMenu(progress) {
+  if (!menuElement) return;
+
+  const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
+  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
+  const progressTitle = menuElement.querySelector("#centrifugue-progress-title");
+  const progressBar = menuElement.querySelector("#centrifugue-progress-bar");
+  const progressText = menuElement.querySelector("#centrifugue-progress-text");
+
+  progressContainer.style.display = "block";
+  downloadOptions.style.display = "none";
+
+  const title = progress.video_title || "Processing";
+  const shortTitle = title.length > 40 ? title.substring(0, 37) + "..." : title;
+  const percent = progress.percent || 0;
+
+  let stageText = "";
+  switch (progress.stage) {
+    case "downloading":
+      stageText = "Downloading audio...";
+      break;
+    case "processing":
+      stageText = progress.message || "Separating stems...";
+      break;
+    case "finalizing":
+      stageText = "Organizing files...";
+      break;
+    default:
+      stageText = "Processing...";
+  }
+
+  progressTitle.textContent = shortTitle;
+  progressBar.style.width = `${percent}%`;
+  progressText.textContent = `${percent}% - ${stageText}`;
+
+  // Update floating button
+  if (floatingButton) {
+    floatingButton.classList.add("processing");
+    floatingButton.textContent = `${percent}%`;
+  }
+}
+
+function hideProgressInMenu() {
+  if (!menuElement) return;
+
+  const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
+  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
+
+  if (progressContainer) progressContainer.style.display = "none";
+  if (downloadOptions) downloadOptions.style.display = "block";
+
+  // Reset floating button
+  if (floatingButton) {
+    floatingButton.classList.remove("processing");
+    floatingButton.textContent = "🎵";
+  }
+}
+
+function setButtonsDisabled(disabled) {
+  if (!menuElement) return;
+
+  const mp3Btn = menuElement.querySelector("#centrifugue-mp3-btn");
+  const stemsBtn = menuElement.querySelector("#centrifugue-stems-btn");
+
+  if (mp3Btn) mp3Btn.disabled = disabled;
+  if (stemsBtn) stemsBtn.disabled = disabled;
+}
+
+async function downloadMP3() {
+  currentVideoUrl = getCurrentVideoUrl();
+  if (!currentVideoUrl) {
+    showStatus("No YouTube video found", "error");
+    return;
+  }
+
+  setButtonsDisabled(true);
+  showStatus("Downloading MP3...", "downloading");
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "download_mp3",
+      url: currentVideoUrl
+    });
+
+    if (response.success) {
+      showStatus(`Downloaded: ${response.filename}`, "success", true);
+    } else {
+      showStatus(`Error: ${response.error}`, "error", true);
+    }
+    setButtonsDisabled(false);
+  } catch (error) {
+    console.error("MP3 download error:", error);
+    showStatus(`Error: ${error.message}`, "error", true);
+    setButtonsDisabled(false);
+  }
+}
+
+async function downloadStems() {
+  currentVideoUrl = getCurrentVideoUrl();
+  if (!currentVideoUrl) {
+    showStatus("No YouTube video found", "error");
+    return;
+  }
+
+  setButtonsDisabled(true);
+  showStatus("Starting stem separation...", "downloading");
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "download_stems",
+      url: currentVideoUrl,
+      quality: selectedQuality,
+      genre: selectedGenre
+    });
+
+    if (response.success) {
+      // Job started, show progress UI
+      showProgressInMenu({
+        stage: "downloading",
+        video_title: response.video_title,
+        percent: 0
+      });
+    } else {
+      showStatus(`Error: ${response.error}`, "error", true);
+      setButtonsDisabled(false);
+    }
+  } catch (error) {
+    console.error("Stems download error:", error);
+    showStatus(`Error: ${error.message}`, "error", true);
+    setButtonsDisabled(false);
+  }
+}
+
+async function cancelJob() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "cancel_job" });
+    if (response.success) {
+      hideProgressInMenu();
+      setButtonsDisabled(false);
+      showStatus("Job cancelled", "idle", true);
+    } else {
+      showStatus(`Cancel failed: ${response.error}`, "error", true);
+    }
+  } catch (error) {
+    console.error("Cancel error:", error);
+    showStatus(`Error: ${error.message}`, "error", true);
+  }
+}
+
+function createStatusElement() {
+  if (statusElement) return statusElement;
+
+  statusElement = document.createElement("div");
+  statusElement.id = "centrifugue-status";
+
+  const iconEl = document.createElement("div");
+  iconEl.className = "centrifugue-status-icon";
+
+  const textEl = document.createElement("div");
+  textEl.className = "centrifugue-status-text";
+  textEl.textContent = "Ready";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "centrifugue-status-close";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", hideStatus);
+
+  statusElement.appendChild(iconEl);
+  statusElement.appendChild(textEl);
+  statusElement.appendChild(closeBtn);
+
+  document.body.appendChild(statusElement);
+  return statusElement;
+}
+
+function showStatus(message, type, autoHide) {
+  type = type || "downloading";
+  autoHide = autoHide || false;
+  
+  const el = createStatusElement();
+
+  if (hideTimeout) {
+    clearTimeout(hideTimeout);
+    hideTimeout = null;
+  }
+
+  el.className = "visible " + type;
+  el.querySelector(".centrifugue-status-text").textContent = message;
+
+  if (autoHide && (type === "success" || type === "error" || type === "idle")) {
+    hideTimeout = setTimeout(hideStatus, 5000);
+  }
+}
+
+function hideStatus() {
+  if (statusElement) {
+    statusElement.classList.remove("visible");
+  }
+}
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "status_update") {
+    const status = message.status;
+    const text = message.text;
+    const progress = message.progress;
+    const autoHide = message.autoHide;
+
+    if (status === "hidden" || status === "idle") {
+      hideStatus();
+      hideProgressInMenu();
+      setButtonsDisabled(false);
+    } else if (status === "downloading") {
+      // Update menu progress if it's open
+      if (isMenuOpen && menuElement) {
+        showProgressInMenu({
+          stage: "processing",
+          message: text,
+          percent: progress || 0
+        });
+      }
+
+      // Update floating button
+      if (floatingButton) {
+        floatingButton.classList.add("processing");
+        if (progress !== null && progress !== undefined) {
+          floatingButton.textContent = progress + "%";
+        }
+      }
+    } else if (status === "success" || status === "error") {
+      showStatus(text, status, autoHide);
+      hideProgressInMenu();
+      setButtonsDisabled(false);
+
+      if (floatingButton) {
+        floatingButton.classList.remove("processing");
+        floatingButton.textContent = "🎵";
+      }
+    }
+  }
+  return false;
+});
+
+// Initialize when on a video page
+function initialize() {
+  if (isVideoPage()) {
+    injectStyles();
+    createFloatingButton();
+
+    // Check if there's an active download
+    chrome.runtime.sendMessage({ action: "check_status" })
+      .then(response => {
+        if (response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
+          if (floatingButton) {
+            floatingButton.classList.add("processing");
+            floatingButton.textContent = (response.percent || 0) + "%";
+          }
+        }
+      })
+      .catch(() => {});
+  } else {
+    // Remove floating button if not on video page
+    if (floatingButton) {
+      floatingButton.remove();
+      floatingButton = null;
+    }
+    if (menuElement) {
+      menuElement.remove();
+      menuElement = null;
+    }
+  }
+}
+
+// Handle YouTube's SPA navigation
+let lastUrl = location.href;
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    lastUrl = url;
+    // Small delay to let YouTube update the DOM
+    setTimeout(initialize, 500);
+  }
+}).observe(document, { subtree: true, childList: true });
+
+// Initial setup
+initialize();
+
+console.log("Centrifugue content script loaded");
