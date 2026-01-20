@@ -304,6 +304,31 @@ def get_video_title(url):
     return None
 
 
+def get_unique_filepath(directory, basename, extension):
+    """
+    Generate a unique filepath by appending (1), (2), etc. if file exists.
+
+    Args:
+        directory: Path to the directory
+        basename: Base filename without extension (e.g., "Numa Numa - original")
+        extension: File extension with dot (e.g., ".mp3")
+
+    Returns:
+        Path object with unique filename
+    """
+    filepath = directory / f"{basename}{extension}"
+    if not filepath.exists():
+        return filepath
+
+    # File exists, find next available number
+    counter = 1
+    while True:
+        filepath = directory / f"{basename} ({counter}){extension}"
+        if not filepath.exists():
+            return filepath
+        counter += 1
+
+
 def combine_stems(stem_files, output_path):
     """Combine multiple stem files into a single mixed audio file using ffmpeg"""
     ffmpeg_path = find_ffmpeg()
@@ -341,14 +366,21 @@ def download_mp3(url):
     download_dir = get_download_dir()
     ytdlp_path = find_ytdlp()
 
+    # Get video title first to determine unique output filename
+    title = get_video_title(url)
+    if not title:
+        title = "audio"
+
+    # Generate unique filepath (appends (1), (2), etc. if file exists)
+    output_path = get_unique_filepath(download_dir, title, '.mp3')
+
     cmd = [
         ytdlp_path,
         '--extract-audio',
         '--audio-format', 'mp3',
         '--audio-quality', '0',
-        '--output', str(download_dir / '%(title)s.%(ext)s'),
+        '--output', str(output_path.with_suffix('.%(ext)s')),
         '--no-playlist',
-        '--print', 'after_move:filepath',
         url
     ]
 
@@ -361,17 +393,27 @@ def download_mp3(url):
         )
 
         if result.returncode == 0:
-            output_lines = result.stdout.strip().split('\n')
-            filename = output_lines[-1] if output_lines else "download complete"
-
-            if os.path.exists(filename):
-                filename = os.path.basename(filename)
-
-            return {
-                'success': True,
-                'filename': filename,
-                'message': 'Download completed successfully'
-            }
+            # Verify the file was actually created
+            if output_path.exists():
+                return {
+                    'success': True,
+                    'filename': output_path.name,
+                    'message': 'Download completed successfully'
+                }
+            else:
+                # yt-dlp returned success but file doesn't exist
+                # This can happen with YouTube bot detection issues
+                error_msg = 'Download failed: file was not created. '
+                if 'Signature solving failed' in result.stderr:
+                    error_msg += 'YouTube bot detection issue. Try updating yt-dlp: brew upgrade yt-dlp'
+                elif result.stderr:
+                    error_msg += result.stderr
+                else:
+                    error_msg += 'Unknown error (no output file)'
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
         else:
             return {
                 'success': False,
