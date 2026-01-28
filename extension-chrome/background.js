@@ -8,16 +8,45 @@ const PROGRESS_ALARM_NAME = "centrifugue-progress-poll";
 
 // Track last progress for change detection
 let lastProgress = null;
+// Track if native messaging is configured
+let nativeMessagingConfigured = null; // null = unknown, true = works, false = needs setup
 
 /**
  * Send a message to the native host and return a promise
  */
 async function sendToNativeHost(message) {
   try {
-    return await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message);
+    const result = await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message);
+    nativeMessagingConfigured = true;
+    return result;
   } catch (error) {
-    console.error("Native messaging error:", error);
+    // Check if this is a "host not found" error (needs setup, not a real error)
+    if (error.message && error.message.includes("native messaging host not found")) {
+      console.log("Native messaging not configured - setup required");
+      nativeMessagingConfigured = false;
+      broadcastSetupRequired();
+    } else {
+      console.error("Native messaging error:", error);
+    }
     throw error;
+  }
+}
+
+/**
+ * Broadcast setup required message to all YouTube tabs
+ */
+async function broadcastSetupRequired() {
+  const extensionId = chrome.runtime.id;
+  try {
+    const tabs = await chrome.tabs.query({ url: ["*://*.youtube.com/*", "*://*.youtu.be/*"] });
+    for (const tab of tabs) {
+      chrome.tabs.sendMessage(tab.id, {
+        type: "setup_required",
+        extensionId: extensionId
+      }).catch(() => {});
+    }
+  } catch (error) {
+    console.error("Broadcast setup error:", error);
   }
 }
 
@@ -298,6 +327,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(result);
       })
       .catch(error => sendResponse({ success: false, error: error.message, stage: "idle" }));
+    return true;
+  }
+
+  if (message.action === "get_extension_id") {
+    sendResponse({ extensionId: chrome.runtime.id });
+    return false;
+  }
+
+  if (message.action === "check_native_messaging") {
+    // Try to ping the native host to check if it's configured
+    sendToNativeHost({ action: "get_progress" })
+      .then(() => {
+        sendResponse({ configured: true });
+      })
+      .catch(error => {
+        const needsSetup = error.message && error.message.includes("native messaging host not found");
+        sendResponse({ configured: !needsSetup, error: error.message });
+      });
     return true;
   }
 

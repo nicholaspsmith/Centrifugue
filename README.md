@@ -49,9 +49,11 @@ This will:
 2. Enable **Developer mode** (toggle in top right)
 3. Click **Load unpacked**
 4. Navigate to the `extension-chrome` folder
-5. Copy the **extension ID** shown under the extension name
-6. Edit `native-host/com.centrifugue.stemextractor.chrome.json`
-7. Replace `YOUR_EXTENSION_ID_HERE` with your extension ID
+5. Go to a YouTube video and click the floating 🎵 button
+6. A setup overlay will appear with a Terminal command - click **Copy** and run it
+7. Reload the page
+
+> **Note:** Chrome requires a one-time setup because unpacked extensions get a unique ID. The extension detects this and shows the setup instructions automatically.
 
 ## Features
 
