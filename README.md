@@ -8,7 +8,50 @@
   <strong>AI-Powered Audio Stem Separation for YouTube</strong>
 </p>
 
-Centrifugue is a Firefox/Zen Browser extension that extracts audio stems (vocals, drums, bass, other) from YouTube videos using [Demucs](https://github.com/facebookresearch/demucs), a state-of-the-art AI model from Meta.
+Centrifugue is a browser extension that extracts audio stems (vocals, drums, bass, other) from YouTube videos using [Demucs](https://github.com/facebookresearch/demucs), a state-of-the-art AI model from Meta.
+
+## Requirements
+
+- macOS (Apple Silicon recommended for GPU acceleration)
+- Firefox, Zen Browser, or Google Chrome
+- Python 3.9+
+- [Homebrew](https://brew.sh) (for installing dependencies)
+
+## Installation
+
+### 1. Clone and Install Dependencies
+
+```bash
+git clone https://github.com/yourusername/centrifugue.git
+cd centrifugue
+./install.sh
+```
+
+This will:
+- Check/install required dependencies (yt-dlp, ffmpeg)
+- Create a Python virtual environment
+- Install Demucs and its dependencies
+- Configure native messaging hosts for all browsers
+
+### 2. Load the Extension
+
+#### Firefox / Zen Browser
+
+1. Open Firefox or Zen Browser
+2. Go to `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on"
+4. Navigate to the `extension` folder
+5. Select `manifest.json`
+
+#### Google Chrome
+
+1. Open Chrome and go to `chrome://extensions`
+2. Enable **Developer mode** (toggle in top right)
+3. Click **Load unpacked**
+4. Navigate to the `extension-chrome` folder
+5. Copy the **extension ID** shown under the extension name
+6. Edit `native-host/com.centrifugue.stemextractor.chrome.json`
+7. Replace `YOUR_EXTENSION_ID_HERE` with your extension ID
 
 ## Features
 
@@ -20,45 +63,11 @@ Centrifugue is a Firefox/Zen Browser extension that extracts audio stems (vocals
   - **Rock** - Vocals, Drums, Bass
 - **Quality Presets**:
   - **Fast** (~2 min) - Quick processing
-  - **Balanced** (~5 min) - Good quality
-  - **High** (~10 min) - Best quality, minimal stem bleed
+  - **Detailed** (~5 min) - Higher quality separation
 - **Floating Button** - Access directly from YouTube without opening the extension
 - **Background Processing** - Continue browsing while stems are extracted
 - **Real-time Progress** - See actual Demucs progress, not just estimates
 - **Apple Silicon Optimized** - Uses MPS GPU acceleration on M1/M2/M3 Macs
-
-## Requirements
-
-- macOS (Apple Silicon recommended for GPU acceleration)
-- Firefox or Zen Browser
-- Python 3.9+
-- [Homebrew](https://brew.sh) (for installing dependencies)
-
-## Installation
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/centrifugue.git
-   cd centrifugue
-   ```
-
-2. Run the install script:
-   ```bash
-   ./install.sh
-   ```
-
-   This will:
-   - Check/install required dependencies (yt-dlp, ffmpeg)
-   - Create a Python virtual environment
-   - Install Demucs and its dependencies
-   - Configure the native messaging host for Firefox/Zen
-
-3. Load the extension in your browser:
-   - Open Firefox/Zen Browser
-   - Go to `about:debugging#/runtime/this-firefox`
-   - Click "Load Temporary Add-on"
-   - Navigate to the `extension` folder
-   - Select `manifest.json`
 
 ## Usage
 
@@ -69,7 +78,7 @@ Centrifugue is a Firefox/Zen Browser extension that extracts audio stems (vocals
    - **Download Stems** - AI-powered stem separation
 4. For stems, select:
    - Genre mode (Full, Hip Hop, or Rock)
-   - Quality preset (Fast, Balanced, or High)
+   - Quality preset (Fast or Detailed)
 5. Click "Download Stems" and wait for processing
 
 You can close the popup or navigate to other videos - processing continues in the background!
@@ -96,9 +105,14 @@ You can close the popup or navigate to other videos - processing continues in th
 
 ```
 centrifugue/
-├── extension/              # Browser extension
+├── extension/              # Firefox/Zen extension
 │   ├── manifest.json       # Extension configuration
 │   ├── background.js       # Native messaging & progress polling
+│   ├── content.js          # Floating UI on YouTube pages
+│   └── popup/              # Extension popup UI
+├── extension-chrome/       # Chrome extension (Manifest V3)
+│   ├── manifest.json       # Chrome extension configuration
+│   ├── background.js       # Service worker for native messaging
 │   ├── content.js          # Floating UI on YouTube pages
 │   └── popup/              # Extension popup UI
 ├── native-host/            # Native messaging host
@@ -118,18 +132,33 @@ The extension communicates with a Python native messaging host that:
 ### "Demucs not found" error
 Run `./install.sh` to set up the virtual environment with Demucs.
 
+### "Native messaging host not found" (Chrome)
+Make sure you've updated the Chrome native messaging manifest with your extension ID:
+1. Go to `chrome://extensions` and copy your extension ID
+2. Edit `native-host/com.centrifugue.stemextractor.chrome.json`
+3. Replace `YOUR_EXTENSION_ID_HERE` with your extension ID
+
 ### Slow processing
 - Use the "Fast" quality preset for quicker results
 - Ensure you're on Apple Silicon for GPU acceleration (MPS)
 - Close other GPU-intensive applications
 
-### Extension not working
+### Extension not working (Firefox)
 1. Check that the extension is loaded in `about:debugging`
 2. Verify native messaging is set up:
    ```bash
    ls -la ~/Library/Application\ Support/Mozilla/NativeMessagingHosts/
    ```
 3. Look for errors in the browser console (F12 → Console)
+
+### Extension not working (Chrome)
+1. Check that the extension is loaded in `chrome://extensions`
+2. Verify native messaging is set up:
+   ```bash
+   ls -la ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/
+   cat ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.centrifugue.stemextractor.json
+   ```
+3. Ensure the extension ID in the manifest matches your loaded extension
 
 ### Download fails
 - Update yt-dlp: `brew upgrade yt-dlp`

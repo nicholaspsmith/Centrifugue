@@ -13,6 +13,8 @@ VENV_DIR="$SCRIPT_DIR/venv-demucs"
 # Native messaging hosts directories
 FIREFOX_NATIVE_DIR="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
 ZEN_NATIVE_DIR="$HOME/Library/Application Support/zen/NativeMessagingHosts"
+CHROME_NATIVE_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+CHROME_MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifugue.stemextractor.chrome.json"
 
 echo "=========================================="
 echo "  Centrifugue Installation"
@@ -120,18 +122,44 @@ mkdir -p "$ZEN_NATIVE_DIR"
 ln -sf "$MANIFEST_FILE" "$ZEN_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Zen Browser: $ZEN_NATIVE_DIR"
 
+# Create Chrome-specific manifest (uses allowed_origins instead of allowed_extensions)
+# Placeholder extension ID - user must update after loading extension
+cat > "$CHROME_MANIFEST_FILE" << EOF
+{
+  "name": "com.centrifugue.stemextractor",
+  "description": "Centrifugue native messaging host for audio stem separation",
+  "path": "$HOST_SCRIPT",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://YOUR_EXTENSION_ID_HERE/"]
+}
+EOF
+
+mkdir -p "$CHROME_NATIVE_DIR"
+ln -sf "$CHROME_MANIFEST_FILE" "$CHROME_NATIVE_DIR/com.centrifugue.stemextractor.json"
+echo "  [OK] Chrome: $CHROME_NATIVE_DIR (requires extension ID update)"
+
 echo
 echo "=========================================="
 echo "  Installation Complete!"
 echo "=========================================="
 echo
-echo "To use Centrifugue:"
+echo "=== Firefox / Zen Browser ==="
 echo
 echo "1. Open Firefox or Zen Browser"
 echo "2. Go to: about:debugging#/runtime/this-firefox"
 echo "3. Click 'Load Temporary Add-on'"
 echo "4. Navigate to: $SCRIPT_DIR/extension"
 echo "5. Select the manifest.json file"
+echo
+echo "=== Google Chrome ==="
+echo
+echo "1. Open Chrome and go to: chrome://extensions"
+echo "2. Enable 'Developer mode' (top right)"
+echo "3. Click 'Load unpacked'"
+echo "4. Navigate to: $SCRIPT_DIR/extension-chrome"
+echo "5. Copy the extension ID shown under the extension name"
+echo "6. Edit: $CHROME_MANIFEST_FILE"
+echo "7. Replace YOUR_EXTENSION_ID_HERE with your extension ID"
 echo
 echo "A floating button will appear on YouTube video pages."
 echo "Click it to download MP3 or extract stems!"

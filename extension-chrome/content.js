@@ -502,8 +502,7 @@ function createMenu() {
 
   const qualities = [
     { value: "fast", label: "Fast", desc: "~2 min", selected: true },
-    { value: "balanced", label: "Balanced", desc: "~5 min", selected: false },
-    { value: "high", label: "High", desc: "~10 min", selected: false }
+    { value: "balanced", label: "Detailed", desc: "~5 min", selected: false }
   ];
 
   qualities.forEach(q => {
