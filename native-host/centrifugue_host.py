@@ -352,13 +352,23 @@ def combine_stems(stem_files, output_path):
 
 
 def parse_demucs_progress(line):
-    """Parse demucs tqdm output for progress percentage"""
+    """Parse demucs tqdm output for progress percentage and shift info.
+
+    Returns: tuple (percent, current_shift, total_shifts) or (None, None, None)
+
+    When --shifts N is used, Demucs runs N+1 passes. Each pass shows 0-100%.
+    We need to calculate overall progress as:
+      overall = (current_shift / total_shifts) * 100 + (percent / total_shifts)
+    """
+    # Check for shift info: "Separated track audio shift 2"
+    shift_match = re.search(r'shift\s+(\d+)', line, re.IGNORECASE)
+    current_shift = int(shift_match.group(1)) if shift_match else None
+
     # tqdm format: " 50%|█████     | 617/1234 [01:23<01:20, 7.68it/s]"
-    # or: "Separating track 1/1"
-    match = re.search(r'(\d+)%\|', line)
-    if match:
-        return int(match.group(1))
-    return None
+    percent_match = re.search(r'(\d+)%\|', line)
+    percent = int(percent_match.group(1)) if percent_match else None
+
+    return percent, current_shift
 
 
 def download_mp3(url):
@@ -539,16 +549,41 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         )
 
         # Read stderr for progress (tqdm outputs to stderr)
-        last_percent = 10
+        # With --shifts N, Demucs runs N+1 passes (shifts 0 through N)
+        total_shifts = preset['shifts'] + 1  # shifts=0 means 1 pass, shifts=5 means 6 passes
+        current_shift = 0
+        last_percent = 0
+        last_overall = 10
+
         for line in active_process.stderr:
-            progress = parse_demucs_progress(line)
-            if progress is not None and progress > last_percent:
-                last_percent = progress
-                # Scale 0-100 demucs progress to 10-90 overall progress
-                overall = 10 + int(progress * 0.8)
-                write_progress('processing', f'Separating stems... {progress}%', percent=overall,
-                              estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
-                              action='download_stems', quality=quality, genre=genre)
+            percent, detected_shift = parse_demucs_progress(line)
+
+            # Update current shift if detected
+            if detected_shift is not None:
+                current_shift = detected_shift
+                last_percent = 0  # Reset for new shift
+
+            if percent is not None:
+                # Only update if progress increased within current shift
+                if percent >= last_percent:
+                    last_percent = percent
+
+                    # Calculate overall progress: 10-90% range across all shifts
+                    # Each shift contributes (80 / total_shifts) percent
+                    shift_contribution = (current_shift / total_shifts) * 80
+                    percent_contribution = (percent / 100) * (80 / total_shifts)
+                    overall = 10 + int(shift_contribution + percent_contribution)
+
+                    # Only update if overall progress increased
+                    if overall > last_overall:
+                        last_overall = overall
+                        if total_shifts > 1:
+                            msg = f'Separating stems... Pass {current_shift + 1}/{total_shifts} ({percent}%)'
+                        else:
+                            msg = f'Separating stems... {percent}%'
+                        write_progress('processing', msg, percent=overall,
+                                      estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
+                                      action='download_stems', quality=quality, genre=genre)
 
         active_process.wait()
 
