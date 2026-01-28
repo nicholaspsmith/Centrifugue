@@ -349,6 +349,123 @@ function injectStyles() {
     #centrifugue-cancel-btn:hover {
       background: #555;
     }
+
+    #centrifugue-setup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .centrifugue-setup-modal {
+      background: #1a1a1a;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .centrifugue-setup-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .centrifugue-setup-icon {
+      font-size: 32px;
+    }
+    .centrifugue-setup-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .centrifugue-setup-subtitle {
+      color: #888;
+      font-size: 14px;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .centrifugue-setup-step {
+      background: #222;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .centrifugue-setup-step-title {
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .centrifugue-setup-step-num {
+      background: #ff0000;
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .centrifugue-setup-step-content {
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .centrifugue-setup-code {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 8px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #4fc3f7;
+      word-break: break-all;
+      position: relative;
+    }
+    .centrifugue-setup-copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #444;
+      border: none;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .centrifugue-setup-copy-btn:hover {
+      background: #555;
+    }
+    .centrifugue-setup-copy-btn.copied {
+      background: #2e7d32;
+    }
+    .centrifugue-setup-close {
+      width: 100%;
+      padding: 12px;
+      background: #333;
+      border: none;
+      color: #fff;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .centrifugue-setup-close:hover {
+      background: #444;
+    }
   `;
   document.head.appendChild(styles);
 }
@@ -582,11 +699,28 @@ function openMenu() {
   const shortTitle = videoTitle.length > 50 ? videoTitle.substring(0, 47) + "..." : videoTitle;
   menuElement.querySelector(".centrifugue-menu-subtitle").textContent = shortTitle;
 
+  // Check if native messaging is configured
+  checkNativeMessaging();
+
   // Check for active job
   checkActiveJob();
 
   menuElement.classList.add("visible");
   isMenuOpen = true;
+}
+
+async function checkNativeMessaging() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "check_native_messaging" });
+    if (response && !response.configured) {
+      const idResponse = await chrome.runtime.sendMessage({ action: "get_extension_id" });
+      if (idResponse && idResponse.extensionId) {
+        showSetupUI(idResponse.extensionId);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to check native messaging:", error);
+  }
 }
 
 function closeMenu() {
@@ -810,8 +944,153 @@ function hideStatus() {
   }
 }
 
+// Setup UI for native messaging configuration
+let setupOverlay = null;
+
+function showSetupUI(extensionId) {
+  if (setupOverlay) return; // Already showing
+
+  injectStyles();
+
+  setupOverlay = document.createElement("div");
+  setupOverlay.id = "centrifugue-setup-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "centrifugue-setup-modal";
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "centrifugue-setup-header";
+
+  const icon = document.createElement("span");
+  icon.className = "centrifugue-setup-icon";
+  icon.textContent = "🔧";
+
+  const title = document.createElement("span");
+  title.className = "centrifugue-setup-title";
+  title.textContent = "Setup Required";
+
+  header.appendChild(icon);
+  header.appendChild(title);
+
+  // Subtitle
+  const subtitle = document.createElement("div");
+  subtitle.className = "centrifugue-setup-subtitle";
+  subtitle.textContent = "Centrifugue needs to connect to its native host for audio processing. Run this command in Terminal to complete setup:";
+
+  // Step 1 - The command
+  const step1 = document.createElement("div");
+  step1.className = "centrifugue-setup-step";
+
+  const step1Title = document.createElement("div");
+  step1Title.className = "centrifugue-setup-step-title";
+
+  const step1Num = document.createElement("span");
+  step1Num.className = "centrifugue-setup-step-num";
+  step1Num.textContent = "1";
+
+  step1Title.appendChild(step1Num);
+  step1Title.appendChild(document.createTextNode(" Copy and run in Terminal"));
+
+  const step1Content = document.createElement("div");
+  step1Content.className = "centrifugue-setup-step-content";
+
+  const codeBlock = document.createElement("div");
+  codeBlock.className = "centrifugue-setup-code";
+
+  // The command to update the manifest
+  const manifestPath = "~/Library/Application\\ Support/Google/Chrome/NativeMessagingHosts/com.centrifugue.stemextractor.json";
+  const sedCommand = `sed -i '' 's/YOUR_EXTENSION_ID_HERE/${extensionId}/' ${manifestPath}`;
+
+  codeBlock.textContent = sedCommand;
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "centrifugue-setup-copy-btn";
+  copyBtn.textContent = "Copy";
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(sedCommand.replace(/\\ /g, " ")).then(() => {
+      copyBtn.textContent = "Copied!";
+      copyBtn.classList.add("copied");
+      setTimeout(() => {
+        copyBtn.textContent = "Copy";
+        copyBtn.classList.remove("copied");
+      }, 2000);
+    });
+  });
+
+  codeBlock.appendChild(copyBtn);
+  step1Content.appendChild(codeBlock);
+  step1.appendChild(step1Title);
+  step1.appendChild(step1Content);
+
+  // Step 2 - Reload
+  const step2 = document.createElement("div");
+  step2.className = "centrifugue-setup-step";
+
+  const step2Title = document.createElement("div");
+  step2Title.className = "centrifugue-setup-step-title";
+
+  const step2Num = document.createElement("span");
+  step2Num.className = "centrifugue-setup-step-num";
+  step2Num.textContent = "2";
+
+  step2Title.appendChild(step2Num);
+  step2Title.appendChild(document.createTextNode(" Reload this page"));
+
+  const step2Content = document.createElement("div");
+  step2Content.className = "centrifugue-setup-step-content";
+  step2Content.textContent = "After running the command, refresh this page to start using Centrifugue.";
+
+  step2.appendChild(step2Title);
+  step2.appendChild(step2Content);
+
+  // Extension ID info
+  const idInfo = document.createElement("div");
+  idInfo.className = "centrifugue-setup-step-content";
+  idInfo.style.marginTop = "12px";
+  idInfo.style.fontSize = "11px";
+  idInfo.style.color = "#666";
+  idInfo.textContent = `Extension ID: ${extensionId}`;
+
+  // Close button
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "centrifugue-setup-close";
+  closeBtn.textContent = "Close";
+  closeBtn.addEventListener("click", hideSetupUI);
+
+  // Assemble modal
+  modal.appendChild(header);
+  modal.appendChild(subtitle);
+  modal.appendChild(step1);
+  modal.appendChild(step2);
+  modal.appendChild(idInfo);
+  modal.appendChild(closeBtn);
+
+  setupOverlay.appendChild(modal);
+  document.body.appendChild(setupOverlay);
+
+  // Close on overlay click
+  setupOverlay.addEventListener("click", (e) => {
+    if (e.target === setupOverlay) {
+      hideSetupUI();
+    }
+  });
+}
+
+function hideSetupUI() {
+  if (setupOverlay) {
+    setupOverlay.remove();
+    setupOverlay = null;
+  }
+}
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "setup_required") {
+    showSetupUI(message.extensionId);
+    return false;
+  }
+
   if (message.type === "status_update") {
     const status = message.status;
     const text = message.text;
