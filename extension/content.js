@@ -425,12 +425,8 @@ function createMenu() {
             <div class="centrifugue-option-desc">~2 min</div>
           </div>
           <div class="centrifugue-option centrifugue-quality-option" data-quality="balanced">
-            <div class="centrifugue-option-label">Balanced</div>
+            <div class="centrifugue-option-label">Detailed</div>
             <div class="centrifugue-option-desc">~5 min</div>
-          </div>
-          <div class="centrifugue-option centrifugue-quality-option" data-quality="high">
-            <div class="centrifugue-option-label">High</div>
-            <div class="centrifugue-option-desc">~10 min</div>
           </div>
         </div>
 
