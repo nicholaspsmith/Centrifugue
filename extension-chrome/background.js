@@ -20,11 +20,13 @@ async function sendToNativeHost(message) {
     nativeMessagingConfigured = true;
     return result;
   } catch (error) {
-    console.error("Native messaging error:", error);
-    // Check if this is a "host not found" error
+    // Check if this is a "host not found" error (needs setup, not a real error)
     if (error.message && error.message.includes("native messaging host not found")) {
+      console.log("Native messaging not configured - setup required");
       nativeMessagingConfigured = false;
       broadcastSetupRequired();
+    } else {
+      console.error("Native messaging error:", error);
     }
     throw error;
   }
