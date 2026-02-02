@@ -162,12 +162,17 @@ Make sure you've updated the Chrome native messaging manifest with your extensio
    ```
 3. Ensure the extension ID in the manifest matches your loaded extension
 
-### Download fails
-- Update yt-dlp: `brew upgrade yt-dlp`
-- Test directly:
-  ```bash
-  yt-dlp -x --audio-format mp3 "https://www.youtube.com/watch?v=VIDEO_ID"
-  ```
+### Download fails with 403 Forbidden
+Centrifugue uses Firefox cookies to authenticate with YouTube (required due to YouTube's bot detection). If downloads fail:
+
+1. **Make sure Firefox is your default browser** or at least has been used to browse YouTube recently
+2. **Update yt-dlp**: `brew upgrade yt-dlp`
+3. **Test directly**:
+   ```bash
+   yt-dlp --cookies-from-browser firefox -x --audio-format mp3 "https://www.youtube.com/watch?v=VIDEO_ID"
+   ```
+
+> **Note:** If you see errors about "SABR streaming" or "403 Forbidden", this is a YouTube restriction. The Firefox cookies workaround should resolve it.
 
 ## License
 
