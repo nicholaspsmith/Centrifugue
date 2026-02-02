@@ -292,7 +292,9 @@ def get_video_title(url):
     ytdlp_path = find_ytdlp()
     try:
         result = subprocess.run(
-            [ytdlp_path, '--get-title', '--no-playlist', url],
+            [ytdlp_path, '--get-title', '--no-playlist',
+             '--cookies-from-browser', 'firefox',
+             url],
             capture_output=True,
             text=True,
             timeout=30
@@ -391,6 +393,7 @@ def download_mp3(url):
         '--audio-quality', '0',
         '--output', str(output_path.with_suffix('.%(ext)s')),
         '--no-playlist',
+        '--cookies-from-browser', 'firefox',
         url
     ]
 
@@ -488,6 +491,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
             '--audio-quality', '0',
             '--output', str(audio_file),
             '--no-playlist',
+            '--cookies-from-browser', 'firefox',
             url
         ]
 
