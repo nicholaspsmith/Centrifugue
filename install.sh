@@ -95,6 +95,27 @@ else
     echo "  [OK] Demucs installed successfully"
 fi
 
+# Install audio-separator for BS-RoFormer (Ultra preset).
+# torch/torchaudio/torchvision are pinned: audio-separator would otherwise
+# upgrade torch past what demucs's torchaudio build supports.
+echo "  Installing audio-separator (BS-RoFormer support)..."
+"$VENV_DIR/bin/pip" install --quiet "audio-separator[cpu]" \
+    "torch==2.9.1" "torchaudio==2.9.1" "torchvision==0.24.*"
+echo "  [OK] audio-separator installed"
+
+# Pre-download the BS-RoFormer model so the first Ultra run doesn't stall
+MODEL_CACHE_DIR="$SCRIPT_DIR/.cache/audio-separator-models"
+mkdir -p "$MODEL_CACHE_DIR"
+if [ -f "$MODEL_CACHE_DIR/model_bs_roformer_ep_317_sdr_12.9755.ckpt" ]; then
+    echo "  [OK] BS-RoFormer model already downloaded"
+else
+    echo "  Pre-downloading BS-RoFormer model (~640 MB, one-time)..."
+    "$VENV_DIR/bin/audio-separator" --download_model_only \
+        -m model_bs_roformer_ep_317_sdr_12.9755.ckpt \
+        --model_file_dir "$MODEL_CACHE_DIR" \
+        || echo "  [WARN] Model pre-download failed (offline?) - it will download on first Ultra run"
+fi
+
 echo
 
 # Update the native messaging manifest
