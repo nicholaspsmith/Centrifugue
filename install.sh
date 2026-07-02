@@ -125,14 +125,22 @@ ln -sf "$MANIFEST_FILE" "$ZEN_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Zen Browser: $ZEN_NATIVE_DIR"
 
 # Create Chrome-specific manifest (uses allowed_origins instead of allowed_extensions)
-# Placeholder extension ID - user must update after loading extension
+# Keep the extension ID from a previous run if one was already configured;
+# otherwise use a placeholder the user must replace after loading the extension
+EXTENSION_ID="YOUR_EXTENSION_ID_HERE"
+if [ -f "$CHROME_MANIFEST_FILE" ]; then
+    EXISTING_ID=$(sed -n 's|.*chrome-extension://\([a-p]\{32\}\)/.*|\1|p' "$CHROME_MANIFEST_FILE")
+    if [ -n "$EXISTING_ID" ]; then
+        EXTENSION_ID="$EXISTING_ID"
+    fi
+fi
 cat > "$CHROME_MANIFEST_FILE" << EOF
 {
   "name": "com.centrifugue.stemextractor",
   "description": "Centrifugue native messaging host for audio stem separation",
   "path": "$HOST_SCRIPT",
   "type": "stdio",
-  "allowed_origins": ["chrome-extension://YOUR_EXTENSION_ID_HERE/"]
+  "allowed_origins": ["chrome-extension://$EXTENSION_ID/"]
 }
 EOF
 
