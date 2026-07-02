@@ -58,14 +58,16 @@ This will:
 ## Features
 
 - **One-Click MP3 Download** - Extract audio from any YouTube video
-- **AI Stem Separation** - Split audio into individual stems using Demucs
+- **AI Stem Separation** - Split audio into individual stems using Demucs and BS-RoFormer
 - **Genre Modes**:
   - **Full** - All 4 stems (vocals, drums, bass, other)
   - **Hip Hop** - Vocals + Beat (combined instrumental)
   - **Rock** - Vocals, Drums, Bass
 - **Quality Presets**:
-  - **Fast** (~2 min) - Quick processing
-  - **Detailed** (~5 min) - Higher quality separation
+  - **Fast** (~2 min) - Quick processing (htdemucs)
+  - **Detailed** (~4 min) - Higher quality separation (fine-tuned htdemucs_ft)
+  - **Ultra** (~10 min) - Best quality: BS-RoFormer vocal separation +
+    Demucs instrument split, lossless FLAC output
 - **Floating Button** - Access directly from YouTube without opening the extension
 - **Background Processing** - Continue browsing while stems are extracted
 - **Real-time Progress** - See actual Demucs progress, not just estimates
@@ -80,7 +82,7 @@ This will:
    - **Download Stems** - AI-powered stem separation
 4. For stems, select:
    - Genre mode (Full, Hip Hop, or Rock)
-   - Quality preset (Fast or Detailed)
+   - Quality preset (Fast, Detailed, or Ultra)
 5. Click "Download Stems" and wait for processing
 
 You can close the popup or navigate to other videos - processing continues in the background!
