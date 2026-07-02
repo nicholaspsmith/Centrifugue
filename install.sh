@@ -14,6 +14,7 @@ VENV_DIR="$SCRIPT_DIR/venv-demucs"
 FIREFOX_NATIVE_DIR="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
 ZEN_NATIVE_DIR="$HOME/Library/Application Support/zen/NativeMessagingHosts"
 CHROME_NATIVE_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+ARC_NATIVE_DIR="$HOME/Library/Application Support/Arc/User Data/NativeMessagingHosts"
 CHROME_MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifugue.stemextractor.chrome.json"
 
 echo "=========================================="
@@ -137,6 +138,10 @@ EOF
 mkdir -p "$CHROME_NATIVE_DIR"
 ln -sf "$CHROME_MANIFEST_FILE" "$CHROME_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Chrome: $CHROME_NATIVE_DIR (requires extension ID update)"
+
+mkdir -p "$ARC_NATIVE_DIR"
+ln -sf "$CHROME_MANIFEST_FILE" "$ARC_NATIVE_DIR/com.centrifugue.stemextractor.json"
+echo "  [OK] Arc: $ARC_NATIVE_DIR (requires extension ID update)"
 
 echo
 echo "=========================================="
