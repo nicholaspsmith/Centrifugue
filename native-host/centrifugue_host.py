@@ -897,7 +897,13 @@ def cancel_job():
         try:
             pid = job_state.get('pid')
             if pid:
-                os.kill(pid, signal.SIGTERM)
+                # Worker was started with start_new_session=True, so pid is
+                # the process-group leader; kill the group so a running
+                # separation subprocess dies too instead of being orphaned
+                try:
+                    os.killpg(pid, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    os.kill(pid, signal.SIGTERM)
         except:
             pass
 
