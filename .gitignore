@@ -21,6 +21,12 @@ __pycache__/
 *.swp
 *.swo
 
+# Local AI tool state
+.glancey/
+.lance-context/
+.lance-context.json
+.serena/
+
 # Temporary files
 *.tmp
 *.temp
