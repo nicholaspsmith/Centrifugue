@@ -467,6 +467,77 @@ def download_mp3(url):
         }
 
 
+def run_demucs_stage(input_file, output_root, model, shifts, overlap, use_flac, progress_cb):
+    """Run Demucs on input_file; return {stem_name: Path} or None on failure.
+
+    progress_cb(stage_percent, detail) gets within-stage progress 0-100.
+    """
+    global active_process
+
+    cmd = [
+        str(DEMUCS_PYTHON), '-m', 'demucs',
+        str(input_file),
+        '-n', model,
+        '-o', str(output_root),
+        '--overlap', str(overlap),
+        '-d', 'mps'  # Apple Metal GPU acceleration
+    ]
+    cmd.extend(['--flac'] if use_flac else ['--mp3', '--mp3-bitrate', '320'])
+    if shifts > 0:
+        cmd.extend(['--shifts', str(shifts)])
+
+    active_process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, bufsize=1
+    )
+
+    # With --shifts N, Demucs runs N+1 passes; tqdm goes to stderr
+    total_shifts = shifts + 1
+    current_shift = 0
+    last_percent = 0
+    last_stage = 0
+
+    for line in active_process.stderr:
+        percent, detected_shift = parse_demucs_progress(line)
+        if detected_shift is not None:
+            current_shift = detected_shift
+            last_percent = 0
+        if percent is not None and percent >= last_percent:
+            last_percent = percent
+            stage_pct = int((current_shift / total_shifts) * 100
+                            + percent / total_shifts)
+            if stage_pct > last_stage:
+                last_stage = stage_pct
+                if total_shifts > 1:
+                    detail = f'Pass {current_shift + 1}/{total_shifts} ({percent}%)'
+                else:
+                    detail = f'{percent}%'
+                progress_cb(stage_pct, detail)
+
+    active_process.wait()
+    returncode = active_process.returncode
+    active_process = None
+    if returncode != 0:
+        return None
+
+    ext = 'flac' if use_flac else 'mp3'
+    stems_dir = Path(output_root) / model / Path(input_file).stem
+    if not stems_dir.exists():
+        for potential_dir in Path(output_root).rglob("*"):
+            if potential_dir.is_dir() and any(potential_dir.glob(f"*.{ext}")):
+                stems_dir = potential_dir
+                break
+    if not stems_dir.exists():
+        return None
+
+    stems = {}
+    for stem_file in stems_dir.glob("*.*"):
+        name = stem_file.stem.lower()
+        if name in ('vocals', 'drums', 'bass', 'other'):
+            stems[name] = stem_file
+    return stems or None
+
+
 def run_stem_separation_background(job_id, url, quality, genre, title):
     """Run stem separation as independent worker process with real-time progress parsing"""
     global active_process
@@ -550,81 +621,28 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                       estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
                       action='download_stems', quality=quality, genre=genre)
 
-        # Step 2: Run Demucs with real-time progress parsing
+        # Step 2: Separate
         demucs_output = temp_path / "separated"
 
-        demucs_cmd = [
-            str(DEMUCS_PYTHON), '-m', 'demucs',
-            str(audio_file),
-            '-n', preset['model'],
-            '-o', str(demucs_output),
-            '--overlap', str(preset['overlap']),
-            '--mp3', '--mp3-bitrate', '320',
-            '-d', 'mps'  # Use Apple Metal Performance Shaders for GPU acceleration
-        ]
-
-        if preset['shifts'] > 0:
-            demucs_cmd.extend(['--shifts', str(preset['shifts'])])
-
-        # Start demucs process
-        active_process = subprocess.Popen(
-            demucs_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
-
-        # Read stderr for progress (tqdm outputs to stderr)
-        # With --shifts N, Demucs runs N+1 passes (shifts 0 through N)
-        total_shifts = preset['shifts'] + 1  # shifts=0 means 1 pass, shifts=5 means 6 passes
-        current_shift = 0
-        last_percent = 0
-        last_overall = 10
-
-        for line in active_process.stderr:
-            percent, detected_shift = parse_demucs_progress(line)
-
-            # Update current shift if detected
-            if detected_shift is not None:
-                current_shift = detected_shift
-                last_percent = 0  # Reset for new shift
-
-            if percent is not None:
-                # Only update if progress increased within current shift
-                if percent >= last_percent:
-                    last_percent = percent
-
-                    # Calculate overall progress: 10-90% range across all shifts
-                    # Each shift contributes (80 / total_shifts) percent
-                    shift_contribution = (current_shift / total_shifts) * 80
-                    percent_contribution = (percent / 100) * (80 / total_shifts)
-                    overall = 10 + int(shift_contribution + percent_contribution)
-
-                    # Only update if overall progress increased
-                    if overall > last_overall:
-                        last_overall = overall
-                        if total_shifts > 1:
-                            msg = f'Separating stems... Pass {current_shift + 1}/{total_shifts} ({percent}%)'
-                        else:
-                            msg = f'Separating stems... {percent}%'
-                        write_progress('processing', msg, percent=overall,
-                                      estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
-                                      action='download_stems', quality=quality, genre=genre)
-
-        active_process.wait()
-
-        if active_process.returncode != 0:
-            stderr_output = active_process.stderr.read() if active_process.stderr else "Unknown error"
-            write_progress('error', f'Stem separation failed',
-                          error=stderr_output, job_id=job_id, video_title=title,
+        def demucs_progress(stage_pct, detail):
+            overall = 10 + int(stage_pct * 0.8)  # map 0-100 -> 10-90
+            write_progress('processing', f'Separating stems... {detail}',
+                          percent=overall, estimated_seconds=estimated_seconds,
+                          job_id=job_id, video_title=title,
                           action='download_stems', quality=quality, genre=genre)
+
+        stem_files = run_demucs_stage(
+            audio_file, demucs_output, preset['model'], preset['shifts'],
+            preset['overlap'], use_flac=False, progress_cb=demucs_progress)
+
+        if stem_files is None:
+            write_progress('error', 'Stem separation failed',
+                          error='Demucs did not produce stems', job_id=job_id,
+                          video_title=title, action='download_stems',
+                          quality=quality, genre=genre)
             shutil.rmtree(temp_dir, ignore_errors=True)
             clear_job_state()
-            active_process = None
             return
-
-        active_process = None
 
         # Step 3: Organize output files
         write_progress('finalizing', 'Organizing stem files...', percent=92,
@@ -636,34 +654,12 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         output_folder = download_dir / f"{title} - {genre_suffix.get(genre, 'Stems')}{quality_suffix.get(quality, '')}"
         output_folder.mkdir(exist_ok=True)
 
-        # Find the stems
-        stems_dir = demucs_output / preset['model'] / audio_file.stem
-        if not stems_dir.exists():
-            for potential_dir in demucs_output.rglob("*"):
-                if potential_dir.is_dir() and any(potential_dir.glob("*.mp3")):
-                    stems_dir = potential_dir
-                    break
-
-        if not stems_dir.exists():
-            write_progress('error', 'Stem files not found after separation',
-                          error='Output files not found', job_id=job_id, video_title=title,
-                          action='download_stems', quality=quality, genre=genre)
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            clear_job_state()
-            return
-
         stem_mapping = {
             'vocals': 'Vocals',
             'drums': 'Drums',
             'bass': 'Bass',
             'other': 'Other'
         }
-
-        stem_files = {}
-        for stem_file in stems_dir.glob("*.*"):
-            stem_name = stem_file.stem.lower()
-            if stem_name in stem_mapping:
-                stem_files[stem_name] = stem_file
 
         copied_files = []
 
