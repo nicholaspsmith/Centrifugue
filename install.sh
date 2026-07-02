@@ -15,6 +15,7 @@ FIREFOX_NATIVE_DIR="$HOME/Library/Application Support/Mozilla/NativeMessagingHos
 ZEN_NATIVE_DIR="$HOME/Library/Application Support/zen/NativeMessagingHosts"
 CHROME_NATIVE_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
 ARC_NATIVE_DIR="$HOME/Library/Application Support/Arc/User Data/NativeMessagingHosts"
+BRAVE_NATIVE_DIR="$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"
 CHROME_MANIFEST_FILE="$NATIVE_HOST_DIR/com.centrifugue.stemextractor.chrome.json"
 
 echo "=========================================="
@@ -143,6 +144,10 @@ mkdir -p "$ARC_NATIVE_DIR"
 ln -sf "$CHROME_MANIFEST_FILE" "$ARC_NATIVE_DIR/com.centrifugue.stemextractor.json"
 echo "  [OK] Arc: $ARC_NATIVE_DIR (requires extension ID update)"
 
+mkdir -p "$BRAVE_NATIVE_DIR"
+ln -sf "$CHROME_MANIFEST_FILE" "$BRAVE_NATIVE_DIR/com.centrifugue.stemextractor.json"
+echo "  [OK] Brave: $BRAVE_NATIVE_DIR (requires extension ID update)"
+
 echo
 echo "=========================================="
 echo "  Installation Complete!"
@@ -156,9 +161,9 @@ echo "3. Click 'Load Temporary Add-on'"
 echo "4. Navigate to: $SCRIPT_DIR/extension"
 echo "5. Select the manifest.json file"
 echo
-echo "=== Google Chrome ==="
+echo "=== Google Chrome / Brave / Arc ==="
 echo
-echo "1. Open Chrome and go to: chrome://extensions"
+echo "1. Open the browser and go to: chrome://extensions (brave://extensions in Brave)"
 echo "2. Enable 'Developer mode' (top right)"
 echo "3. Click 'Load unpacked'"
 echo "4. Navigate to: $SCRIPT_DIR/extension-chrome"
