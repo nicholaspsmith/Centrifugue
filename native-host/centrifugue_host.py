@@ -228,16 +228,19 @@ def send_message(message):
 
 
 def find_ytdlp():
-    """Find yt-dlp in common locations"""
+    """Find yt-dlp executable, checking common install locations"""
     locations = [
         '/opt/homebrew/bin/yt-dlp',
         '/usr/local/bin/yt-dlp',
+        str(Path.home() / '.local' / 'bin' / 'yt-dlp'),
         '/usr/bin/yt-dlp',
     ]
     for loc in locations:
         if os.path.isfile(loc) and os.access(loc, os.X_OK):
             return loc
-    return 'yt-dlp'
+    # Fall back to PATH search
+    found = shutil.which('yt-dlp')
+    return found if found else None
 
 
 def find_ffmpeg():
@@ -266,6 +269,15 @@ def find_ffprobe():
     return None
 
 
+def get_ytdlp_auth_args():
+    """Get yt-dlp args to bypass YouTube bot detection.
+
+    Uses cookies from Firefox; the tv_embedded player client was deprecated
+    upstream and is now rejected with "Skipping unsupported client".
+    """
+    return ['--cookies-from-browser', 'firefox']
+
+
 def get_audio_duration(file_path):
     """Get audio duration in seconds using ffprobe"""
     ffprobe_path = find_ffprobe()
@@ -292,9 +304,7 @@ def get_video_title(url):
     ytdlp_path = find_ytdlp()
     try:
         result = subprocess.run(
-            [ytdlp_path, '--get-title', '--no-playlist',
-             '--cookies-from-browser', 'firefox',
-             url],
+            [ytdlp_path, '--get-title', '--no-playlist'] + get_ytdlp_auth_args() + [url],
             capture_output=True,
             text=True,
             timeout=30
@@ -378,6 +388,9 @@ def download_mp3(url):
     download_dir = get_download_dir()
     ytdlp_path = find_ytdlp()
 
+    if not ytdlp_path:
+        return {'success': False, 'error': 'yt-dlp not found. Install it with: brew install yt-dlp'}
+
     # Get video title first to determine unique output filename
     title = get_video_title(url)
     if not title:
@@ -393,9 +406,7 @@ def download_mp3(url):
         '--audio-quality', '0',
         '--output', str(output_path.with_suffix('.%(ext)s')),
         '--no-playlist',
-        '--cookies-from-browser', 'firefox',
-        url
-    ]
+    ] + get_ytdlp_auth_args() + [url]
 
     try:
         result = subprocess.run(
@@ -428,10 +439,10 @@ def download_mp3(url):
                     'error': error_msg
                 }
         else:
-            return {
-                'success': False,
-                'error': result.stderr or 'yt-dlp failed with no error message'
-            }
+            error = result.stderr or 'yt-dlp failed with no error message'
+            if 'Sign in to confirm' in error or 'bot' in error.lower():
+                error = 'YouTube bot detection error. Try updating yt-dlp: brew upgrade yt-dlp'
+            return {'success': False, 'error': error}
 
     except FileNotFoundError:
         return {
@@ -458,6 +469,14 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
     ytdlp_path = find_ytdlp()
     preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS['fast'])
     genre_mode = GENRE_MODES.get(genre, GENRE_MODES['full'])
+
+    if not ytdlp_path:
+        write_progress('error', 'yt-dlp not found. Install it with: brew install yt-dlp',
+                      error='yt-dlp not found. Install it with: brew install yt-dlp',
+                      job_id=job_id, video_title=title, action='download_stems',
+                      quality=quality, genre=genre)
+        clear_job_state()
+        return
 
     # Check if Demucs is available (requires venv-demucs to be set up)
     demucs_available = DEMUCS_PYTHON.is_file() and os.access(DEMUCS_PYTHON, os.X_OK)
@@ -491,9 +510,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
             '--audio-quality', '0',
             '--output', str(audio_file),
             '--no-playlist',
-            '--cookies-from-browser', 'firefox',
-            url
-        ]
+        ] + get_ytdlp_auth_args() + [url]
 
         result = subprocess.run(download_cmd, capture_output=True, text=True, timeout=300)
 
