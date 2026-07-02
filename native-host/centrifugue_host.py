@@ -34,6 +34,11 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 DEMUCS_VENV = PROJECT_ROOT / 'venv-demucs'
 DEMUCS_PYTHON = DEMUCS_VENV / 'bin' / 'python'
 
+# audio-separator (BS-RoFormer) for the Ultra preset's vocal stage
+SEPARATOR_BIN = DEMUCS_VENV / 'bin' / 'audio-separator'
+ROFORMER_MODEL = 'model_bs_roformer_ep_317_sdr_12.9755.ckpt'
+MODEL_CACHE_DIR = PROJECT_ROOT / '.cache' / 'audio-separator-models'
+
 # Quality presets for stem separation
 QUALITY_PRESETS = {
     'fast': {
@@ -45,20 +50,21 @@ QUALITY_PRESETS = {
         'description': 'Fast processing, basic quality'
     },
     'balanced': {
-        'model': 'htdemucs',
-        'shifts': 5,
+        'model': 'htdemucs_ft',
+        'shifts': 0,
         'overlap': 0.5,
         'cpu_limit': 400,
-        'time_multiplier': 1.2,
-        'description': 'Good balance of speed and quality'
+        'time_multiplier': 1.0,
+        'description': 'Fine-tuned model, good quality'
     },
-    'high': {
-        'model': 'htdemucs_ft',
-        'shifts': 10,
-        'overlap': 0.75,
+    'ultra': {
+        'model': 'htdemucs_ft',   # stage 2; stage 1 is BS-RoFormer
+        'engine': 'hybrid',
+        'shifts': 0,
+        'overlap': 0.5,
         'cpu_limit': 500,
         'time_multiplier': 2.5,
-        'description': 'Best quality, minimal stem bleeding'
+        'description': 'Hybrid BS-RoFormer + Demucs, best quality'
     }
 }
 
@@ -538,7 +544,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         if audio_duration:
             estimated_seconds = int(audio_duration * preset['time_multiplier']) + 30
         else:
-            estimated_seconds = {'fast': 90, 'balanced': 300, 'high': 600}.get(quality, 120)
+            estimated_seconds = {'fast': 90, 'balanced': 240, 'ultra': 600}.get(quality, 120)
 
         write_progress('processing', 'Separating stems with AI...', percent=10,
                       estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
@@ -625,7 +631,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                       job_id=job_id, video_title=title, action='download_stems',
                       quality=quality, genre=genre)
 
-        quality_suffix = {'fast': '', 'balanced': ' (HQ)', 'high': ' (Ultra)'}
+        quality_suffix = {'fast': '', 'balanced': ' (HQ)', 'ultra': ' (Ultra)'}
         genre_suffix = {'full': 'Stems', 'hiphop': 'Hip Hop', 'rock': 'Rock'}
         output_folder = download_dir / f"{title} - {genre_suffix.get(genre, 'Stems')}{quality_suffix.get(quality, '')}"
         output_folder.mkdir(exist_ok=True)
