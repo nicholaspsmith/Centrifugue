@@ -11,6 +11,77 @@ let selectedQuality = "fast";
 let selectedGenre = "full";
 let isMenuOpen = false;
 let currentVideoUrl = null;
+let contextInvalidated = false;
+
+/**
+ * True while this script's extension context is alive. Reloading/updating the
+ * extension orphans injected scripts: their chrome.runtime binding is severed
+ * (chrome.runtime.id becomes undefined) but the script and its DOM live on.
+ */
+function isExtensionContextValid() {
+  try {
+    return Boolean(chrome.runtime && chrome.runtime.id);
+  } catch (error) {
+    return false;
+  }
+}
+
+function isContextInvalidatedError(error) {
+  return Boolean(error && typeof error.message === "string" &&
+                 error.message.includes("Extension context invalidated"));
+}
+
+/**
+ * Neuter this orphaned copy of the script: stop watching navigation, remove
+ * its UI, and optionally tell the user to refresh. The new extension
+ * instance's background worker re-injects a fresh copy (see background.js),
+ * so passive detection stays silent; only a user click shows the message.
+ */
+function handleInvalidatedContext(notify) {
+  if (contextInvalidated) return;
+  contextInvalidated = true;
+
+  navigationObserver.disconnect();
+
+  if (floatingButton) {
+    floatingButton.remove();
+    floatingButton = null;
+  }
+  if (menuElement) {
+    menuElement.remove();
+    menuElement = null;
+  }
+  isMenuOpen = false;
+  hideSetupUI();
+
+  if (notify) {
+    showStatus("Centrifugue was updated — refresh this page to keep using it", "error");
+  } else if (statusElement) {
+    statusElement.remove();
+    statusElement = null;
+  }
+}
+
+/**
+ * Send a message to the background worker, detecting extension reloads.
+ * Returns null (after tearing down this orphaned script) if the extension
+ * context is gone; callers must handle null.
+ */
+async function sendMessageSafe(message, notifyOnInvalid) {
+  if (contextInvalidated || !isExtensionContextValid()) {
+    handleInvalidatedContext(notifyOnInvalid);
+    return null;
+  }
+  try {
+    return await chrome.runtime.sendMessage(message);
+  } catch (error) {
+    if (isContextInvalidatedError(error)) {
+      handleInvalidatedContext(notifyOnInvalid);
+      return null;
+    }
+    throw error;
+  }
+}
 
 // Check if we're on a YouTube video page
 function isVideoPage() {
@@ -681,6 +752,11 @@ function createMenu() {
 }
 
 function toggleMenu() {
+  if (contextInvalidated || !isExtensionContextValid()) {
+    handleInvalidatedContext(true);
+    return;
+  }
+
   if (!menuElement) {
     createMenu();
   }
@@ -712,9 +788,9 @@ function openMenu() {
 
 async function checkNativeMessaging() {
   try {
-    const response = await chrome.runtime.sendMessage({ action: "check_native_messaging" });
+    const response = await sendMessageSafe({ action: "check_native_messaging" });
     if (response && !response.configured) {
-      const idResponse = await chrome.runtime.sendMessage({ action: "get_extension_id" });
+      const idResponse = await sendMessageSafe({ action: "get_extension_id" });
       if (idResponse && idResponse.extensionId) {
         showSetupUI(idResponse.extensionId);
       }
@@ -733,9 +809,9 @@ function closeMenu() {
 
 async function checkActiveJob() {
   try {
-    const response = await chrome.runtime.sendMessage({ action: "get_progress" });
+    const response = await sendMessageSafe({ action: "get_progress" });
 
-    if (response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
+    if (response && response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
       showProgressInMenu(response);
     } else {
       hideProgressInMenu();
@@ -824,10 +900,11 @@ async function downloadMP3() {
   showStatus("Downloading MP3...", "downloading");
 
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessageSafe({
       action: "download_mp3",
       url: currentVideoUrl
-    });
+    }, true);
+    if (!response) return;
 
     if (response.success) {
       showStatus(`Downloaded: ${response.filename}`, "success", true);
@@ -853,12 +930,13 @@ async function downloadStems() {
   showStatus("Starting stem separation...", "downloading");
 
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessageSafe({
       action: "download_stems",
       url: currentVideoUrl,
       quality: selectedQuality,
       genre: selectedGenre
-    });
+    }, true);
+    if (!response) return;
 
     if (response.success) {
       // Job started, show progress UI
@@ -880,7 +958,9 @@ async function downloadStems() {
 
 async function cancelJob() {
   try {
-    const response = await chrome.runtime.sendMessage({ action: "cancel_job" });
+    const response = await sendMessageSafe({ action: "cancel_job" }, true);
+    if (!response) return;
+
     if (response.success) {
       hideProgressInMenu();
       setButtonsDisabled(false);
@@ -1135,14 +1215,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Initialize when on a video page
 function initialize() {
+  if (contextInvalidated) return;
+
   if (isVideoPage()) {
     injectStyles();
     createFloatingButton();
 
     // Check if there's an active download
-    chrome.runtime.sendMessage({ action: "check_status" })
+    sendMessageSafe({ action: "check_status" })
       .then(response => {
-        if (response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
+        if (response && response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
           if (floatingButton) {
             floatingButton.classList.add("processing");
             floatingButton.textContent = (response.percent || 0) + "%";
@@ -1165,14 +1247,15 @@ function initialize() {
 
 // Handle YouTube's SPA navigation
 let lastUrl = location.href;
-new MutationObserver(() => {
+const navigationObserver = new MutationObserver(() => {
   const url = location.href;
   if (url !== lastUrl) {
     lastUrl = url;
     // Small delay to let YouTube update the DOM
     setTimeout(initialize, 500);
   }
-}).observe(document, { subtree: true, childList: true });
+});
+navigationObserver.observe(document, { subtree: true, childList: true });
 
 // Initial setup
 initialize();
