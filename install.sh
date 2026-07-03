@@ -98,9 +98,11 @@ fi
 # Install audio-separator for BS-RoFormer (Ultra preset).
 # torch/torchaudio/torchvision are pinned: audio-separator would otherwise
 # upgrade torch past what demucs's torchaudio build supports.
+# torchcodec (pinned to the torch 2.9-compatible release) is required by
+# torchaudio.save, which demucs uses for FLAC output in the Ultra preset.
 echo "  Installing audio-separator (BS-RoFormer support)..."
 "$VENV_DIR/bin/pip" install --quiet "audio-separator[cpu]" \
-    "torch==2.9.1" "torchaudio==2.9.1" "torchvision==0.24.*"
+    "torch==2.9.1" "torchaudio==2.9.1" "torchvision==0.24.*" "torchcodec==0.9.*"
 echo "  [OK] audio-separator installed"
 
 # Pre-download the BS-RoFormer model so the first Ultra run doesn't stall
