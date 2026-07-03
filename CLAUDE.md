@@ -73,6 +73,19 @@ When working on features:
 4. Mark tasks as complete by changing `[ ]` to `[x]`
 5. Commit changes following rules in `.claude/rules.md`
 
+## Issue Tracking (beads)
+
+This repo tracks bugs and tasks with [beads](https://github.com/steveyegge/beads)
+(`bd` CLI, issue prefix `cf-`, data in `.beads/`):
+
+- `bd ready` — list actionable issues; `bd list` — all issues
+- `bd show cf-<id>` — full description (root cause and suggested fix are kept there)
+- `bd create "title" -t bug|task|chore -p 0-4 -d "..."` — file new findings
+- `bd close cf-<id>` when fixed; issues export to `.beads/issues.jsonl` (committed)
+
+When you discover a bug you aren't fixing immediately, file it with `bd create`
+rather than leaving it in conversation.
+
 ## Constitution
 
 Follow the project principles defined in `.specify/memory/constitution.md`:
