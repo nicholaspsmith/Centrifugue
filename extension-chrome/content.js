@@ -1167,6 +1167,12 @@ function hideSetupUI() {
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "ping") {
+    // Liveness check from background.js before re-injecting after a reload
+    sendResponse({ pong: true });
+    return false;
+  }
+
   if (message.type === "setup_required") {
     showSetupUI(message.extensionId);
     return false;
@@ -1213,6 +1219,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
+/**
+ * Remove UI elements left in the page by a previous (now orphaned) copy of
+ * this script — Chromium keeps the old DOM across extension reloads, and the
+ * re-injected copy runs in a fresh isolated world that can't see the old
+ * script's variables, only its DOM.
+ */
+function removeOrphanedUi() {
+  const ids = [
+    "centrifugue-styles",
+    "centrifugue-floating-btn",
+    "centrifugue-menu",
+    "centrifugue-status",
+    "centrifugue-setup-overlay"
+  ];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+}
+
 // Initialize when on a video page
 function initialize() {
   if (contextInvalidated) return;
@@ -1258,6 +1284,7 @@ const navigationObserver = new MutationObserver(() => {
 navigationObserver.observe(document, { subtree: true, childList: true });
 
 // Initial setup
+removeOrphanedUi();
 initialize();
 
 console.log("Centrifugue content script loaded");

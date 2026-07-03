@@ -351,6 +351,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
+/**
+ * Re-inject the content script into open YouTube tabs on install/update/reload.
+ * Chromium orphans content scripts from the previous extension instance (their
+ * chrome.runtime binding is severed) and never re-injects into existing tabs,
+ * so without this every already-open YouTube tab throws "Extension context
+ * invalidated" on the next click. A live content script answers the ping;
+ * only tabs without one get an injection.
+ */
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    const tabs = await chrome.tabs.query({ url: ["*://*.youtube.com/*", "*://*.youtu.be/*"] });
+    for (const tab of tabs) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { type: "ping" });
+      } catch (pingError) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ["content.js"]
+          });
+        } catch (injectError) {
+          // Tab can't be scripted (discarded, error page, etc.) - ignore
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Content script re-injection error:", error);
+  }
+});
+
 // Check for active jobs when service worker starts
 sendToNativeHost({ action: "get_progress" })
   .then(result => {
