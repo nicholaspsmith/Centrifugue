@@ -37,3 +37,9 @@ native-host/com.centrifugue.stemextractor.chrome.json
 
 # Model cache (downloaded on first run)
 .cache/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
