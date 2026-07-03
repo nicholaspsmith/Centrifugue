@@ -34,6 +34,11 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 DEMUCS_VENV = PROJECT_ROOT / 'venv-demucs'
 DEMUCS_PYTHON = DEMUCS_VENV / 'bin' / 'python'
 
+# audio-separator (BS-RoFormer) for the Ultra preset's vocal stage
+SEPARATOR_BIN = DEMUCS_VENV / 'bin' / 'audio-separator'
+ROFORMER_MODEL = 'model_bs_roformer_ep_317_sdr_12.9755.ckpt'
+MODEL_CACHE_DIR = PROJECT_ROOT / '.cache' / 'audio-separator-models'
+
 # Quality presets for stem separation
 QUALITY_PRESETS = {
     'fast': {
@@ -45,20 +50,21 @@ QUALITY_PRESETS = {
         'description': 'Fast processing, basic quality'
     },
     'balanced': {
-        'model': 'htdemucs',
-        'shifts': 5,
+        'model': 'htdemucs_ft',
+        'shifts': 0,
         'overlap': 0.5,
         'cpu_limit': 400,
-        'time_multiplier': 1.2,
-        'description': 'Good balance of speed and quality'
+        'time_multiplier': 1.0,
+        'description': 'Fine-tuned model, good quality'
     },
-    'high': {
-        'model': 'htdemucs_ft',
-        'shifts': 10,
-        'overlap': 0.75,
+    'ultra': {
+        'model': 'htdemucs_ft',   # stage 2; stage 1 is BS-RoFormer
+        'engine': 'hybrid',
+        'shifts': 0,
+        'overlap': 0.5,
         'cpu_limit': 500,
         'time_multiplier': 2.5,
-        'description': 'Best quality, minimal stem bleeding'
+        'description': 'Hybrid BS-RoFormer + Demucs, best quality'
     }
 }
 
@@ -342,19 +348,21 @@ def get_unique_filepath(directory, basename, extension):
 
 
 def combine_stems(stem_files, output_path):
-    """Combine multiple stem files into a single mixed audio file using ffmpeg"""
+    """Mix multiple stems into one file with ffmpeg (codec from extension)"""
     ffmpeg_path = find_ffmpeg()
 
     cmd = [ffmpeg_path, '-y']
     for stem_file in stem_files:
         cmd.extend(['-i', str(stem_file)])
 
-    cmd.extend([
-        '-filter_complex', f'amix=inputs={len(stem_files)}:duration=longest',
-        '-codec:a', 'libmp3lame',
-        '-b:a', '320k',
-        str(output_path)
-    ])
+    # normalize=0: stems are components of one mix; plain summation
+    # reconstructs it. Default amix normalization would halve volumes.
+    filter_arg = f'amix=inputs={len(stem_files)}:duration=longest:normalize=0'
+    if str(output_path).lower().endswith('.flac'):
+        codec_args = ['-c:a', 'flac']
+    else:
+        codec_args = ['-codec:a', 'libmp3lame', '-b:a', '320k']
+    cmd.extend(['-filter_complex', filter_arg] + codec_args + [str(output_path)])
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -461,6 +469,123 @@ def download_mp3(url):
         }
 
 
+def run_demucs_stage(input_file, output_root, model, shifts, overlap, use_flac, progress_cb):
+    """Run Demucs on input_file; return {stem_name: Path} or None on failure.
+
+    progress_cb(stage_percent, detail) gets within-stage progress 0-100.
+    """
+    global active_process
+
+    cmd = [
+        str(DEMUCS_PYTHON), '-m', 'demucs',
+        str(input_file),
+        '-n', model,
+        '-o', str(output_root),
+        '--overlap', str(overlap),
+        '-d', 'mps'  # Apple Metal GPU acceleration
+    ]
+    cmd.extend(['--flac'] if use_flac else ['--mp3', '--mp3-bitrate', '320'])
+    if shifts > 0:
+        cmd.extend(['--shifts', str(shifts)])
+
+    active_process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, bufsize=1
+    )
+
+    # With --shifts N, Demucs runs N+1 passes; tqdm goes to stderr
+    total_shifts = shifts + 1
+    current_shift = 0
+    last_percent = 0
+    last_stage = 0
+
+    for line in active_process.stderr:
+        percent, detected_shift = parse_demucs_progress(line)
+        if detected_shift is not None:
+            current_shift = detected_shift
+            last_percent = 0
+        if percent is not None and percent >= last_percent:
+            last_percent = percent
+            stage_pct = int((current_shift / total_shifts) * 100
+                            + percent / total_shifts)
+            if stage_pct > last_stage:
+                last_stage = stage_pct
+                if total_shifts > 1:
+                    detail = f'Pass {current_shift + 1}/{total_shifts} ({percent}%)'
+                else:
+                    detail = f'{percent}%'
+                progress_cb(stage_pct, detail)
+
+    active_process.wait()
+    returncode = active_process.returncode
+    active_process = None
+    if returncode != 0:
+        return None
+
+    ext = 'flac' if use_flac else 'mp3'
+    stems_dir = Path(output_root) / model / Path(input_file).stem
+    if not stems_dir.exists():
+        for potential_dir in Path(output_root).rglob("*"):
+            if potential_dir.is_dir() and any(potential_dir.glob(f"*.{ext}")):
+                stems_dir = potential_dir
+                break
+    if not stems_dir.exists():
+        return None
+
+    stems = {}
+    for stem_file in stems_dir.glob("*.*"):
+        name = stem_file.stem.lower()
+        if name in ('vocals', 'drums', 'bass', 'other'):
+            stems[name] = stem_file
+    return stems or None
+
+
+def run_roformer_stage(audio_file, output_dir, progress_cb):
+    """Run BS-RoFormer vocal separation via audio-separator.
+
+    Returns (vocals_path, instrumental_path) or None on any failure —
+    caller falls back to a plain Demucs run.
+    """
+    global active_process
+
+    if not (SEPARATOR_BIN.is_file() and os.access(SEPARATOR_BIN, os.X_OK)):
+        return None
+
+    cmd = [
+        str(SEPARATOR_BIN), str(audio_file),
+        '-m', ROFORMER_MODEL,
+        '--model_file_dir', str(MODEL_CACHE_DIR),
+        '--output_dir', str(output_dir),
+        '--output_format', 'FLAC',
+    ]
+
+    try:
+        active_process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1
+        )
+        last = 0
+        for line in active_process.stdout:
+            percent, _ = parse_demucs_progress(line)
+            if percent is not None and percent > last:
+                last = percent
+                progress_cb(percent)
+        active_process.wait()
+        returncode = active_process.returncode
+        active_process = None
+        if returncode != 0:
+            return None
+
+        vocals = next(Path(output_dir).glob('*(Vocals)*'), None)
+        instrumental = next(Path(output_dir).glob('*(Instrumental)*'), None)
+        if vocals and instrumental:
+            return vocals, instrumental
+        return None
+    except Exception:
+        active_process = None
+        return None
+
+
 def run_stem_separation_background(job_id, url, quality, genre, title):
     """Run stem separation as independent worker process with real-time progress parsing"""
     global active_process
@@ -538,126 +663,107 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         if audio_duration:
             estimated_seconds = int(audio_duration * preset['time_multiplier']) + 30
         else:
-            estimated_seconds = {'fast': 90, 'balanced': 300, 'high': 600}.get(quality, 120)
+            estimated_seconds = {'fast': 90, 'balanced': 240, 'ultra': 600}.get(quality, 120)
 
         write_progress('processing', 'Separating stems with AI...', percent=10,
                       estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
                       action='download_stems', quality=quality, genre=genre)
 
-        # Step 2: Run Demucs with real-time progress parsing
+        # Step 2: Separate
         demucs_output = temp_path / "separated"
 
-        demucs_cmd = [
-            str(DEMUCS_PYTHON), '-m', 'demucs',
-            str(audio_file),
-            '-n', preset['model'],
-            '-o', str(demucs_output),
-            '--overlap', str(preset['overlap']),
-            '--mp3', '--mp3-bitrate', '320',
-            '-d', 'mps'  # Use Apple Metal Performance Shaders for GPU acceleration
-        ]
+        def demucs_progress_range(lo, hi):
+            def cb(stage_pct, detail):
+                overall = lo + int(stage_pct / 100 * (hi - lo))
+                write_progress('processing', f'Separating stems... {detail}',
+                              percent=overall, estimated_seconds=estimated_seconds,
+                              job_id=job_id, video_title=title,
+                              action='download_stems', quality=quality, genre=genre)
+            return cb
 
-        if preset['shifts'] > 0:
-            demucs_cmd.extend(['--shifts', str(preset['shifts'])])
+        stem_files = None
 
-        # Start demucs process
-        active_process = subprocess.Popen(
-            demucs_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
+        if preset.get('engine') == 'hybrid':
+            roformer_out = temp_path / 'roformer'
+            stage1_hi = 90 if genre == 'hiphop' else 55
 
-        # Read stderr for progress (tqdm outputs to stderr)
-        # With --shifts N, Demucs runs N+1 passes (shifts 0 through N)
-        total_shifts = preset['shifts'] + 1  # shifts=0 means 1 pass, shifts=5 means 6 passes
-        current_shift = 0
-        last_percent = 0
-        last_overall = 10
+            if not (MODEL_CACHE_DIR / ROFORMER_MODEL).exists():
+                write_progress('processing', 'Downloading AI model (one-time)...',
+                              percent=10, estimated_seconds=estimated_seconds,
+                              job_id=job_id, video_title=title,
+                              action='download_stems', quality=quality, genre=genre)
 
-        for line in active_process.stderr:
-            percent, detected_shift = parse_demucs_progress(line)
+            def stage1_progress(pct):
+                overall = 10 + int(pct / 100 * (stage1_hi - 10))
+                write_progress('processing', f'Separating vocals... {pct}%',
+                              percent=overall, estimated_seconds=estimated_seconds,
+                              job_id=job_id, video_title=title,
+                              action='download_stems', quality=quality, genre=genre)
 
-            # Update current shift if detected
-            if detected_shift is not None:
-                current_shift = detected_shift
-                last_percent = 0  # Reset for new shift
+            stage1 = run_roformer_stage(audio_file, roformer_out, stage1_progress)
 
-            if percent is not None:
-                # Only update if progress increased within current shift
-                if percent >= last_percent:
-                    last_percent = percent
+            if stage1 is not None:
+                vocals_path, instrumental_path = stage1
+                if genre == 'hiphop':
+                    # Instrumental IS the beat — skip stage 2 entirely
+                    stem_files = {'vocals': vocals_path, 'beat': instrumental_path}
+                else:
+                    stage2_stems = run_demucs_stage(
+                        instrumental_path, demucs_output, preset['model'],
+                        preset['shifts'], preset['overlap'], use_flac=True,
+                        progress_cb=demucs_progress_range(55, 90))
+                    if stage2_stems is not None:
+                        # RoFormer vocals replace Demucs vocals; mix Demucs's
+                        # residual "vocals" (whatever RoFormer left in the
+                        # instrumental) into other so no signal is discarded
+                        residual = stage2_stems.pop('vocals', None)
+                        if residual is not None and 'other' in stage2_stems:
+                            mixed_other = temp_path / 'other_mixed.flac'
+                            if combine_stems([stage2_stems['other'], residual], mixed_other):
+                                stage2_stems['other'] = mixed_other
+                        stage2_stems['vocals'] = vocals_path
+                        stem_files = stage2_stems
 
-                    # Calculate overall progress: 10-90% range across all shifts
-                    # Each shift contributes (80 / total_shifts) percent
-                    shift_contribution = (current_shift / total_shifts) * 80
-                    percent_contribution = (percent / 100) * (80 / total_shifts)
-                    overall = 10 + int(shift_contribution + percent_contribution)
+            if stem_files is None:
+                # Fallback: single-model htdemucs_ft run, never fail outright
+                write_progress('processing',
+                              'Ultra unavailable, using Detailed quality...',
+                              percent=10, estimated_seconds=estimated_seconds,
+                              job_id=job_id, video_title=title,
+                              action='download_stems', quality=quality, genre=genre)
 
-                    # Only update if overall progress increased
-                    if overall > last_overall:
-                        last_overall = overall
-                        if total_shifts > 1:
-                            msg = f'Separating stems... Pass {current_shift + 1}/{total_shifts} ({percent}%)'
-                        else:
-                            msg = f'Separating stems... {percent}%'
-                        write_progress('processing', msg, percent=overall,
-                                      estimated_seconds=estimated_seconds, job_id=job_id, video_title=title,
-                                      action='download_stems', quality=quality, genre=genre)
+        if stem_files is None:
+            stem_files = run_demucs_stage(
+                audio_file, demucs_output, preset['model'], preset['shifts'],
+                preset['overlap'], use_flac=False,
+                progress_cb=demucs_progress_range(10, 90))
 
-        active_process.wait()
-
-        if active_process.returncode != 0:
-            stderr_output = active_process.stderr.read() if active_process.stderr else "Unknown error"
-            write_progress('error', f'Stem separation failed',
-                          error=stderr_output, job_id=job_id, video_title=title,
-                          action='download_stems', quality=quality, genre=genre)
+        if stem_files is None:
+            write_progress('error', 'Stem separation failed',
+                          error='Demucs did not produce stems', job_id=job_id,
+                          video_title=title, action='download_stems',
+                          quality=quality, genre=genre)
             shutil.rmtree(temp_dir, ignore_errors=True)
             clear_job_state()
-            active_process = None
             return
-
-        active_process = None
 
         # Step 3: Organize output files
         write_progress('finalizing', 'Organizing stem files...', percent=92,
                       job_id=job_id, video_title=title, action='download_stems',
                       quality=quality, genre=genre)
 
-        quality_suffix = {'fast': '', 'balanced': ' (HQ)', 'high': ' (Ultra)'}
+        quality_suffix = {'fast': '', 'balanced': ' (HQ)', 'ultra': ' (Ultra)'}
         genre_suffix = {'full': 'Stems', 'hiphop': 'Hip Hop', 'rock': 'Rock'}
         output_folder = download_dir / f"{title} - {genre_suffix.get(genre, 'Stems')}{quality_suffix.get(quality, '')}"
         output_folder.mkdir(exist_ok=True)
-
-        # Find the stems
-        stems_dir = demucs_output / preset['model'] / audio_file.stem
-        if not stems_dir.exists():
-            for potential_dir in demucs_output.rglob("*"):
-                if potential_dir.is_dir() and any(potential_dir.glob("*.mp3")):
-                    stems_dir = potential_dir
-                    break
-
-        if not stems_dir.exists():
-            write_progress('error', 'Stem files not found after separation',
-                          error='Output files not found', job_id=job_id, video_title=title,
-                          action='download_stems', quality=quality, genre=genre)
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            clear_job_state()
-            return
 
         stem_mapping = {
             'vocals': 'Vocals',
             'drums': 'Drums',
             'bass': 'Bass',
-            'other': 'Other'
+            'other': 'Other',
+            'beat': 'Beat'
         }
-
-        stem_files = {}
-        for stem_file in stems_dir.glob("*.*"):
-            stem_name = stem_file.stem.lower()
-            if stem_name in stem_mapping:
-                stem_files[stem_name] = stem_file
 
         copied_files = []
 
@@ -669,13 +775,21 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                 shutil.copy2(stem_file, dest_path)
                 copied_files.append(dest_name)
 
-        if 'combine' in genre_mode:
+        if 'beat' in stem_files:
+            # Hybrid hiphop shortcut: the instrumental is already the beat
+            beat_file = stem_files['beat']
+            dest_name = f"{title} - Beat{beat_file.suffix}"
+            shutil.copy2(beat_file, output_folder / dest_name)
+            copied_files.append(dest_name)
+        elif 'combine' in genre_mode:
             for combined_name, source_stems in genre_mode['combine'].items():
                 source_files = [stem_files[s] for s in source_stems if s in stem_files]
                 if source_files:
-                    combined_dest = output_folder / f"{title} - {combined_name.title()}.mp3"
+                    combine_ext = source_files[0].suffix
+                    dest_name = f"{title} - {combined_name.title()}{combine_ext}"
+                    combined_dest = output_folder / dest_name
                     if combine_stems(source_files, combined_dest):
-                        copied_files.append(f"{title} - {combined_name.title()}.mp3")
+                        copied_files.append(dest_name)
 
         # Cleanup temp directory
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -783,7 +897,13 @@ def cancel_job():
         try:
             pid = job_state.get('pid')
             if pid:
-                os.kill(pid, signal.SIGTERM)
+                # Worker was started with start_new_session=True, so pid is
+                # the process-group leader; kill the group so a running
+                # separation subprocess dies too instead of being orphaned
+                try:
+                    os.killpg(pid, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    os.kill(pid, signal.SIGTERM)
         except:
             pass
 
