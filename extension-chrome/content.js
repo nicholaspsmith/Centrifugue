@@ -316,10 +316,12 @@ function injectStyles() {
       transform: translateY(20px);
       transition: opacity 0.3s, transform 0.3s;
       max-width: 350px;
+      pointer-events: none;
     }
     #centrifugue-status.visible {
       opacity: 1;
       transform: translateY(0);
+      pointer-events: auto;
     }
     #centrifugue-status.downloading {
       background: #1565c0;
