@@ -11,6 +11,7 @@ centrifugue/
 │   ├── background.js       # Native messaging & progress polling
 │   ├── content.js          # Floating UI on YouTube pages
 │   └── popup/              # Extension popup UI
+├── extension-chrome/       # Chrome extension (Manifest V3)
 ├── native-host/            # Native messaging host (Python)
 │   └── centrifugue_host.py  # Python backend for stem separation
 ├── venv-demucs/            # Python venv (created by install.sh)
@@ -22,6 +23,7 @@ centrifugue/
 │   ├── memory/             # Constitution and project memory
 │   ├── scripts/            # Workflow scripts
 │   └── templates/          # Spec/plan/task templates
+├── build-xpi.sh            # Packages extension-firefox/ into an installable .xpi
 └── install.sh              # Installation script
 ```
 
@@ -104,6 +106,7 @@ Follow the project principles defined in `.specify/memory/constitution.md`:
 | `extension-firefox/background.js` | Progress polling, native messaging bridge |
 | `extension-firefox/content.js` | YouTube floating UI, status display |
 | `extension-firefox/popup/popup.html` | Extension popup interface |
+| `build-xpi.sh` | Packages `extension-firefox/` into `dist/centrifugue-firefox.xpi` |
 | `install.sh` | Setup script (venv, dependencies, native messaging) |
 
 ## Development Notes

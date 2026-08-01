@@ -186,6 +186,13 @@ echo "=========================================="
 echo
 echo "=== Firefox / Zen Browser ==="
 echo
+echo "Permanent install (survives browser restarts):"
+echo "1. Run: $SCRIPT_DIR/build-xpi.sh"
+echo "2. Open about:config and set xpinstall.signatures.required = false"
+echo "3. Open about:addons -> gear icon -> 'Install Add-on From File...'"
+echo "4. Select: $SCRIPT_DIR/dist/centrifugue-firefox.xpi"
+echo
+echo "Temporary install (cleared on restart):"
 echo "1. Open Firefox or Zen Browser"
 echo "2. Go to: about:debugging#/runtime/this-firefox"
 echo "3. Click 'Load Temporary Add-on'"

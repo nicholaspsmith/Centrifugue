@@ -37,11 +37,30 @@ This will:
 
 #### Firefox / Zen Browser
 
+**Permanent install (recommended — survives browser restarts)**
+
+```bash
+./build-xpi.sh
+```
+
+1. Open `about:config` and set `xpinstall.signatures.required` to `false`
+   (this add-on is not signed by Mozilla, so the browser will otherwise reject it)
+2. Open `about:addons`
+3. Click the gear icon → **Install Add-on From File...**
+4. Select `dist/centrifugue-firefox.xpi`
+
+**Temporary install (cleared when the browser restarts)**
+
 1. Open Firefox or Zen Browser
 2. Go to `about:debugging#/runtime/this-firefox`
 3. Click "Load Temporary Add-on"
 4. Navigate to the `extension-firefox` folder
 5. Select `manifest.json`
+
+> **Note:** Build the `.xpi` with `./build-xpi.sh` rather than zipping the folder by
+> hand. The archive must be rooted at `manifest.json`; zipping the `extension-firefox`
+> directory itself nests everything one level down and the browser rejects the result
+> with "this add-on appears to be corrupt."
 
 #### Google Chrome
 
@@ -122,6 +141,7 @@ centrifugue/
 ├── native-host/            # Native messaging host
 │   └── centrifugue_host.py  # Python backend
 ├── venv-demucs/            # Python venv (created by install.sh)
+├── build-xpi.sh            # Packages extension-firefox/ into an .xpi
 └── install.sh              # Installation script
 ```
 

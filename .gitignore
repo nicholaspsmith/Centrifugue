@@ -47,3 +47,6 @@ native-host/com.centrifugue.stemextractor.chrome.json
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Built extension packages (produced by build-xpi.sh)
+dist/
