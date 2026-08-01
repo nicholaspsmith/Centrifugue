@@ -1,0 +1,37 @@
+"""Filename and folder naming for Centrifugue output.
+
+Pure functions: no filesystem writes, no network. Kept separate from
+centrifugue_host.py so the rules can be unit-tested without a browser,
+a model, or a download.
+"""
+
+import re
+import unicodedata
+
+DEFAULT_MAX_LENGTH = 80
+
+
+def slugify(title, max_length=DEFAULT_MAX_LENGTH, video_id=None):
+    """Normalize a video title into a lowercase ASCII path component.
+
+    A hyphen between word characters is meaningful ("style-ffo") and is
+    kept; a hyphen acting as a separator (" - ") collapses to a single
+    underscore. Any run containing an underscore becomes one underscore,
+    which handles both cases without special-casing.
+    """
+    text = unicodedata.normalize("NFKD", title or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower()
+
+    text = re.sub(r"[^a-z0-9_-]", "_", text)
+    text = re.sub(r"[_-]*_[_-]*", "_", text)
+    text = re.sub(r"-{2,}", "-", text)
+    text = text.strip("_-")
+
+    if max_length and len(text) > max_length:
+        text = text[:max_length].rstrip("_-")
+
+    if not text:
+        return f"video_{video_id}" if video_id else "untitled"
+    return text

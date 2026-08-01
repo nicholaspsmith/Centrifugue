@@ -50,3 +50,7 @@ native-host/com.centrifugue.stemextractor.chrome.json
 
 # Built extension packages (produced by build-xpi.sh)
 dist/
+
+# pytest
+.pytest_cache/
+__pycache__/
