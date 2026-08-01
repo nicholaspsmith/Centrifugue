@@ -171,6 +171,45 @@
     #cancelBtn:hover:not(:disabled) {
       background: #616161;
     }
+    #settings {
+      margin-top: 12px;
+      border-top: 1px solid #e0e0e0;
+      padding-top: 10px;
+      font-size: 12px;
+    }
+    #settings summary {
+      cursor: pointer;
+      color: #666;
+      user-select: none;
+    }
+    #settings label {
+      display: block;
+      margin: 10px 0 4px;
+      color: #666;
+    }
+    #outputDir {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    #saveSettingsBtn {
+      margin-top: 8px;
+      background: #757575;
+      color: white;
+    }
+    #saveSettingsBtn:hover:not(:disabled) {
+      background: #616161;
+    }
+    #settingsStatus {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #888;
+      min-height: 14px;
+    }
   </style>
 </head>
 <body>
@@ -226,6 +265,13 @@
     </button>
   </div>
   <div class="hint">Full: All 4 stems | Hip Hop: Vocals + Beat | Rock: Vocals, Drums, Bass</div>
+  <details id="settings">
+    <summary>Settings</summary>
+    <label for="outputDir">Output folder</label>
+    <input id="outputDir" type="text" spellcheck="false" placeholder="~/Downloads" />
+    <button id="saveSettingsBtn">Save</button>
+    <div id="settingsStatus"></div>
+  </details>
   <script src="popup.js"></script>
 </body>
 </html>

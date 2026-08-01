@@ -242,10 +242,40 @@ async function cancelJob() {
   }
 }
 
+async function loadSettings() {
+  try {
+    const response = await browser.runtime.sendMessage({ action: "get_config" });
+    if (response && response.success) {
+      document.getElementById("outputDir").value = response.config.output_dir;
+    }
+  } catch (error) {
+    // Settings are non-critical: a failure here must not block downloads.
+  }
+}
+
+async function saveSettings() {
+  const status = document.getElementById("settingsStatus");
+  const outputDir = document.getElementById("outputDir").value.trim();
+  status.textContent = "Saving...";
+  try {
+    const response = await browser.runtime.sendMessage({
+      action: "set_config",
+      config: { output_dir: outputDir },
+    });
+    status.textContent =
+      response && response.success ? "Saved" : `Error: ${response.error}`;
+  } catch (error) {
+    status.textContent = `Error: ${error.message}`;
+  }
+}
+
 // Event listeners
 document.getElementById("downloadMp3Btn").addEventListener("click", downloadMP3);
 document.getElementById("downloadStemsBtn").addEventListener("click", downloadStems);
 document.getElementById("cancelBtn").addEventListener("click", cancelJob);
+document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+
+loadSettings();
 
 // Initialize
 checkActiveJob().then(hasActiveJob => {
