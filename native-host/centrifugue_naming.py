@@ -5,7 +5,9 @@ centrifugue_host.py so the rules can be unit-tested without a browser,
 a model, or a download.
 """
 
+import os
 import re
+import shutil
 import unicodedata
 
 DEFAULT_MAX_LENGTH = 80
@@ -71,3 +73,30 @@ def resolve_output_folder(output_dir, slug, genre, quality, read_info):
         if _settings_match(read_info(candidate), genre, quality):
             return candidate, True
         n += 1
+
+
+def publish_folder(temp_dir, target, overwrite):
+    """Move a fully-built temp dir into place in one atomic rename.
+
+    Ableton watches output folders, so it must never observe a partially
+    written one. Same-volume directory rename is atomic; on overwrite the
+    old folder is only deleted after the new one is in place.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if target.exists():
+        if not overwrite:
+            raise FileExistsError(f"{target} already exists")
+        retired = target.with_name(f".{target.name}.old")
+        shutil.rmtree(retired, ignore_errors=True)
+        os.rename(target, retired)
+        try:
+            os.rename(temp_dir, target)
+        except OSError:
+            os.rename(retired, target)
+            raise
+        shutil.rmtree(retired, ignore_errors=True)
+    else:
+        os.rename(temp_dir, target)
+
+    return target
