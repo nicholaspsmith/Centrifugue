@@ -302,6 +302,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "get_config") {
+    sendToNativeHost({ action: "get_config" })
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (message.action === "set_config") {
+    sendToNativeHost({ action: "set_config", config: message.config })
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message.action === "cancel_job") {
     // Cancel the current job
     sendToNativeHost({ action: "cancel_job" })

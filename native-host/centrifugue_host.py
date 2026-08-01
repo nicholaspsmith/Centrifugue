@@ -1145,6 +1145,16 @@ def main():
         result = cancel_job()
         send_message(result)
 
+    elif action == 'get_config':
+        send_message({'success': True, 'config': load_config()})
+
+    elif action == 'set_config':
+        try:
+            updated = save_config(message.get('config') or {})
+            send_message({'success': True, 'config': updated})
+        except ValueError as exc:
+            send_message({'success': False, 'error': str(exc)})
+
     elif action == 'ping':
         send_message({'success': True, 'message': 'pong'})
 
