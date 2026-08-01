@@ -74,6 +74,105 @@ This will:
 
 > **Note:** Chrome requires a one-time setup because unpacked extensions get a unique ID. The extension detects this and shows the setup instructions automatically.
 
+## Configuration
+
+Settings live in `~/.centrifugue/config.json`, created with defaults on first
+run. The output folder can also be changed from the extension popup under
+**Settings** — no need to edit the file by hand.
+
+```json
+{
+  "output_dir": "~/Downloads",
+  "naming": { "style": "lowercase_ascii", "max_length": 80 },
+  "write_info_json": true
+}
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `output_dir` | string | `~/Downloads` | Where song folders are written. `~` is expanded. |
+| `naming.style` | string | `lowercase_ascii` | Folder naming style. Only this value is supported today. |
+| `naming.max_length` | int | `80` | Maximum folder-name length before truncation. |
+| `write_info_json` | bool | `true` | Set to `false` to skip the `info.json` sidecar. |
+
+A missing or malformed config falls back to the defaults rather than failing a
+download.
+
+### Output layout
+
+Each song gets one folder, named from a normalized slug of the video title.
+Stems are named by stem type:
+
+```
+~/Downloads/rockhard_foolio/
+├── vocals.flac
+├── drums.flac
+├── bass.flac
+└── info.json
+```
+
+Re-downloading the same song with the **same** genre and quality replaces the
+folder. A **different** genre or quality creates a separate
+`rockhard_foolio_rock_ultra/` so variants coexist. A folder without a readable
+`info.json` is never overwritten.
+
+MP3-only downloads honour `output_dir` but create no folder and no `info.json`.
+
+### Using stems in Ableton Live
+
+Set the output folder to `~/Music/Ableton/User Library/Centrifugue`. The User
+Library is already a Place in Live's browser, so new song folders appear while a
+project is open — no restart and no manual rescan. Stems are published
+atomically (assembled in a hidden temp folder, then moved into place in one
+operation), so Live never sees a half-written folder.
+
+FLAC — the Ultra preset's output format — requires Live 11 or newer.
+
+## `info.json` reference
+
+Every song folder gets an `info.json` describing how the stems were produced.
+Keys are always present; unavailable values are `null` rather than omitted.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema_version` | int | Sidecar format version. Currently `1`. |
+| `song.title` | string | Original video title, unmodified. |
+| `song.slug` | string | Normalized name used for the folder. |
+| `song.url` | string | Source URL. |
+| `song.video_id` | string\|null | YouTube video id, `null` if not parsed. |
+| `song.duration_seconds` | float\|null | Source audio duration. |
+| `separation` | object\|null | Present for stem jobs. |
+| `separation.genre_mode` | string | `full`, `hiphop`, or `rock`. |
+| `separation.quality_preset` | string | `fast`, `balanced`, or `ultra`. |
+| `separation.stems` | string[] | Stem keys produced. |
+| `separation.models` | object[] | Model chain, in the order it ran. |
+| `separation.models[].stage` | string | `vocals` or `instruments`. |
+| `separation.models[].kind` | string | `bs-roformer` or `demucs`. |
+| `separation.models[].name` | string | Model identifier. |
+| `separation.models[].shifts` | int\|null | Demucs shift passes. |
+| `separation.models[].overlap` | float\|null | Demucs overlap. |
+| `audio.format` | string | Container/extension, e.g. `flac`. |
+| `audio.codec` | string | Codec name. |
+| `audio.sample_rate` | int\|null | Sample rate in Hz. |
+| `audio.channels` | int\|null | Channel count. |
+| `audio.bit_depth` | int\|null | `null` for lossy formats. |
+| `files[].stem` | string | Stem key. |
+| `files[].filename` | string | Filename within the folder. |
+| `files[].bytes` | int | File size in bytes. |
+| `timing.started_at` | string | UTC ISO-8601, `Z` suffix. |
+| `timing.completed_at` | string | UTC ISO-8601, `Z` suffix. |
+| `timing.download_seconds` | float\|null | Time spent in yt-dlp. |
+| `timing.separation_seconds` | float\|null | Time spent in the models. |
+| `timing.total_seconds` | float | Wall-clock total for the job. |
+| `environment.centrifugue_version` | string | Centrifugue version. |
+| `environment.python` | string | Interpreter version. |
+| `environment.platform` | string | OS-release-architecture. |
+| `environment.device` | string\|null | `mps`, `cuda`, or `cpu`. |
+| `environment.demucs` | string\|null | Installed Demucs version. |
+| `environment.audio_separator` | string\|null | Installed audio-separator version. |
+| `environment.torch` | string\|null | Installed torch version. |
+| `environment.yt_dlp` | string\|null | yt-dlp version. |
+
 ## Features
 
 - **One-Click MP3 Download** - Extract audio from any YouTube video
@@ -139,7 +238,11 @@ centrifugue/
 │   ├── content.js          # Floating UI on YouTube pages
 │   └── popup/              # Extension popup UI
 ├── native-host/            # Native messaging host
-│   └── centrifugue_host.py  # Python backend
+│   ├── centrifugue_host.py    # Python backend
+│   ├── centrifugue_config.py  # User config (~/.centrifugue/config.json)
+│   ├── centrifugue_naming.py  # Slug, collision, atomic publish
+│   └── centrifugue_info.py    # info.json builder
+├── tests/                  # pytest suite for the host modules
 ├── venv-demucs/            # Python venv (created by install.sh)
 ├── build-xpi.sh            # Packages extension-firefox/ into an .xpi
 └── install.sh              # Installation script
