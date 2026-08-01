@@ -189,7 +189,7 @@ echo
 echo "1. Open Firefox or Zen Browser"
 echo "2. Go to: about:debugging#/runtime/this-firefox"
 echo "3. Click 'Load Temporary Add-on'"
-echo "4. Navigate to: $SCRIPT_DIR/extension"
+echo "4. Navigate to: $SCRIPT_DIR/extension-firefox"
 echo "5. Select the manifest.json file"
 echo
 echo "=== Google Chrome / Brave / Arc ==="

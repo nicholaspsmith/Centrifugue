@@ -6,7 +6,7 @@ Centrifugue is a Firefox/Zen Browser extension that extracts audio stems from Yo
 
 ```text
 centrifugue/
-├── extension/              # Browser extension (JavaScript)
+├── extension-firefox/      # Firefox/Zen extension (Manifest V2)
 │   ├── manifest.json       # Extension configuration
 │   ├── background.js       # Native messaging & progress polling
 │   ├── content.js          # Floating UI on YouTube pages
@@ -101,9 +101,9 @@ Follow the project principles defined in `.specify/memory/constitution.md`:
 | File | Purpose |
 |------|---------|
 | `native-host/centrifugue_host.py` | Core stem separation logic, native messaging |
-| `extension/background.js` | Progress polling, native messaging bridge |
-| `extension/content.js` | YouTube floating UI, status display |
-| `extension/popup/popup.html` | Extension popup interface |
+| `extension-firefox/background.js` | Progress polling, native messaging bridge |
+| `extension-firefox/content.js` | YouTube floating UI, status display |
+| `extension-firefox/popup/popup.html` | Extension popup interface |
 | `install.sh` | Setup script (venv, dependencies, native messaging) |
 
 ## Development Notes

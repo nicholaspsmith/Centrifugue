@@ -67,8 +67,8 @@ Fixed broken native messaging configuration:
 | File | Purpose |
 |------|---------|
 | `native-host/centrifugue_host.py` | Python backend, stem separation |
-| `extension/background.js` | Native messaging bridge |
-| `extension/content.js` | YouTube floating UI |
+| `extension-firefox/background.js` | Native messaging bridge |
+| `extension-firefox/content.js` | YouTube floating UI |
 | `install.sh` | Setup script (run if native messaging fails) |
 | `.claude/rules.md` | Git commit conventions |
 | `CLAUDE.md` | Full project documentation |

@@ -535,8 +535,8 @@ Expected: `OK`. Full cancel behavior is exercised in Task 7's manual matrix.
 **Files:**
 - Modify: `extension-chrome/content.js:620-623` (qualities array)
 - Modify: `extension-chrome/popup/popup.html:204-213` (quality-options div)
-- Modify: `extension/content.js:421-431` (static quality row HTML)
-- Modify: `extension/popup/popup.html:203-213` (quality-options div)
+- Modify: `extension-firefox/content.js:421-431` (static quality row HTML)
+- Modify: `extension-firefox/popup/popup.html:203-213` (quality-options div)
 
 **Interfaces:** the UI sends `quality: "ultra"` — must match the `QUALITY_PRESETS` key from Task 2 exactly.
 
@@ -569,7 +569,7 @@ Expected: `OK`. Full cancel behavior is exercised in Task 7's manual matrix.
       </div>
 ```
 
-- [ ] **Step 3: extension/content.js** — static HTML block becomes:
+- [ ] **Step 3: extension-firefox/content.js** — static HTML block becomes:
 
 ```html
         <div class="centrifugue-section-title">Quality</div>
@@ -589,7 +589,7 @@ Expected: `OK`. Full cancel behavior is exercised in Task 7's manual matrix.
         </div>
 ```
 
-- [ ] **Step 4: extension/popup/popup.html** — same three-option markup as Step 2 (this file uses the identical `quality-option` classes).
+- [ ] **Step 4: extension-firefox/popup/popup.html** — same three-option markup as Step 2 (this file uses the identical `quality-option` classes).
 
 - [ ] **Step 5: Verify** — load both extensions (Firefox `about:debugging`, Brave `brave://extensions` reload). Open a YouTube video: the floating panel and popup each show Fast / Detailed / Ultra, three across, none clipped. Selecting Ultra highlights it.
 

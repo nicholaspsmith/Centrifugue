@@ -40,7 +40,7 @@ This will:
 1. Open Firefox or Zen Browser
 2. Go to `about:debugging#/runtime/this-firefox`
 3. Click "Load Temporary Add-on"
-4. Navigate to the `extension` folder
+4. Navigate to the `extension-firefox` folder
 5. Select `manifest.json`
 
 #### Google Chrome
@@ -109,7 +109,7 @@ You can close the popup or navigate to other videos - processing continues in th
 
 ```
 centrifugue/
-├── extension/              # Firefox/Zen extension
+├── extension-firefox/      # Firefox/Zen extension (Manifest V2)
 │   ├── manifest.json       # Extension configuration
 │   ├── background.js       # Native messaging & progress polling
 │   ├── content.js          # Floating UI on YouTube pages
