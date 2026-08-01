@@ -35,3 +35,39 @@ def slugify(title, max_length=DEFAULT_MAX_LENGTH, video_id=None):
     if not text:
         return f"video_{video_id}" if video_id else "untitled"
     return text
+
+
+def _settings_match(info, genre, quality):
+    if not info:
+        return False
+    sep = info.get("separation") or {}
+    return sep.get("genre_mode") == genre and sep.get("quality_preset") == quality
+
+
+def resolve_output_folder(output_dir, slug, genre, quality, read_info):
+    """Pick the folder for this render.
+
+    Returns (path, is_overwrite). A folder with no readable info.json is
+    treated as foreign and never overwritten -- it may be hand-made or
+    from an older Centrifugue.
+    """
+    base = output_dir / slug
+    if not base.exists():
+        return base, False
+    if _settings_match(read_info(base), genre, quality):
+        return base, True
+
+    variant = output_dir / f"{slug}_{genre}_{quality}"
+    if not variant.exists():
+        return variant, False
+    if _settings_match(read_info(variant), genre, quality):
+        return variant, True
+
+    n = 2
+    while True:
+        candidate = output_dir / f"{slug}_{genre}_{quality}_{n}"
+        if not candidate.exists():
+            return candidate, False
+        if _settings_match(read_info(candidate), genre, quality):
+            return candidate, True
+        n += 1

@@ -1,5 +1,5 @@
 import pytest
-from centrifugue_naming import slugify
+from centrifugue_naming import slugify, resolve_output_folder
 
 
 @pytest.mark.parametrize("title,expected", [
@@ -48,3 +48,63 @@ def test_truncation_respects_max_length_and_never_ends_in_separator():
 
 def test_collapses_repeated_separators():
     assert slugify("a   ---   b") == "a_b"
+
+
+def _info(genre, quality):
+    return {"separation": {"genre_mode": genre, "quality_preset": quality}}
+
+
+def test_fresh_slug_uses_base_folder(tmp_path):
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra", read_info=lambda p: None)
+    assert target == tmp_path / "song"
+    assert overwrite is False
+
+
+def test_matching_settings_overwrites_in_place(tmp_path):
+    (tmp_path / "song").mkdir()
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra",
+        read_info=lambda p: _info("rock", "ultra"))
+    assert target == tmp_path / "song"
+    assert overwrite is True
+
+
+def test_different_settings_get_variant_folder(tmp_path):
+    (tmp_path / "song").mkdir()
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra",
+        read_info=lambda p: _info("full", "fast"))
+    assert target == tmp_path / "song_rock_ultra"
+    assert overwrite is False
+
+
+def test_folder_without_info_json_is_never_overwritten(tmp_path):
+    (tmp_path / "song").mkdir()
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra", read_info=lambda p: None)
+    assert target == tmp_path / "song_rock_ultra"
+    assert overwrite is False
+
+
+def test_variant_collision_appends_counter(tmp_path):
+    (tmp_path / "song").mkdir()
+    (tmp_path / "song_rock_ultra").mkdir()
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra",
+        read_info=lambda p: _info("full", "fast"))
+    assert target == tmp_path / "song_rock_ultra_2"
+    assert overwrite is False
+
+
+def test_variant_with_matching_settings_overwrites(tmp_path):
+    (tmp_path / "song").mkdir()
+    (tmp_path / "song_rock_ultra").mkdir()
+
+    def reader(p):
+        return _info("full", "fast") if p.name == "song" else _info("rock", "ultra")
+
+    target, overwrite = resolve_output_folder(
+        tmp_path, "song", "rock", "ultra", read_info=reader)
+    assert target == tmp_path / "song_rock_ultra"
+    assert overwrite is True
