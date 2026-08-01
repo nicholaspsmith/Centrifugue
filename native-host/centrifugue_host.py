@@ -21,7 +21,12 @@ import re
 import time
 import threading
 import signal
+from datetime import datetime, timezone
 from pathlib import Path
+
+from centrifugue_config import load_config, save_config, get_output_dir
+from centrifugue_naming import slugify, resolve_output_folder, publish_folder
+from centrifugue_info import build_info, probe_environment
 
 # Ensure Homebrew binaries are in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + os.environ.get('PATH', '')
@@ -94,8 +99,8 @@ SCRIPT_PATH = os.path.abspath(__file__)
 
 
 def get_download_dir():
-    """Get the download directory (~/Downloads by default)"""
-    return Path.home() / "Downloads"
+    """Configured output directory, defaulting to ~/Downloads."""
+    return get_output_dir()
 
 
 def get_progress_file():
@@ -303,6 +308,23 @@ def get_audio_duration(file_path):
     except:
         pass
     return None
+
+
+def probe_audio_stream(file_path):
+    """Return (sample_rate, channels) for an audio file, or (None, None)."""
+    ffprobe_path = find_ffprobe()
+    if not ffprobe_path:
+        return None, None
+    try:
+        result = subprocess.run(
+            [ffprobe_path, '-v', 'error', '-select_streams', 'a:0',
+             '-show_entries', 'stream=sample_rate,channels',
+             '-of', 'default=nw=1:nk=1', str(file_path)],
+            capture_output=True, text=True, timeout=30)
+        parts = result.stdout.split()
+        return int(parts[0]), int(parts[1])
+    except Exception:
+        return None, None
 
 
 def get_video_title(url):
@@ -594,6 +616,31 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
     ytdlp_path = find_ytdlp()
     preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS['fast'])
     genre_mode = GENRE_MODES.get(genre, GENRE_MODES['full'])
+    config = load_config()
+
+    # Provenance and timing captured across the whole job; consumed by the
+    # info.json sidecar at the end. Populated as each stage completes.
+    started_epoch = time.time()
+    started_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    download_seconds = None
+    separation_seconds = None
+    duration_seconds = None
+    audio_sample_rate = None
+    audio_channels = None
+    models_used = []
+
+    _m = re.search(r'(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})', url or '')
+    video_id = _m.group(1) if _m else None
+
+    # Fail before downloading rather than after separation finishes
+    try:
+        download_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        write_progress('error', f'Output folder is not writable: {exc}',
+                       error=str(exc), job_id=job_id, video_title=title,
+                       action='download_stems', quality=quality, genre=genre)
+        clear_job_state()
+        return
 
     if not ytdlp_path:
         write_progress('error', 'yt-dlp not found. Install it with: brew install yt-dlp',
@@ -658,8 +705,12 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
             return
         audio_file = wav_files[0]
 
+        download_seconds = round(time.time() - started_epoch, 2)
+        audio_sample_rate, audio_channels = probe_audio_stream(audio_file)
+
         # Get audio duration for better estimates
         audio_duration = get_audio_duration(audio_file)
+        duration_seconds = audio_duration
         if audio_duration:
             estimated_seconds = int(audio_duration * preset['time_multiplier']) + 30
         else:
@@ -670,6 +721,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                       action='download_stems', quality=quality, genre=genre)
 
         # Step 2: Separate
+        separation_start = time.time()
         demucs_output = temp_path / "separated"
 
         def demucs_progress_range(lo, hi):
@@ -703,6 +755,8 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
             stage1 = run_roformer_stage(audio_file, roformer_out, stage1_progress)
 
             if stage1 is not None:
+                models_used.append({'stage': 'vocals', 'kind': 'bs-roformer',
+                                    'name': ROFORMER_MODEL})
                 vocals_path, instrumental_path = stage1
                 if genre == 'hiphop':
                     # Instrumental IS the beat — skip stage 2 entirely
@@ -713,6 +767,10 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                         preset['shifts'], preset['overlap'], use_flac=True,
                         progress_cb=demucs_progress_range(55, 90))
                     if stage2_stems is not None:
+                        models_used.append({
+                            'stage': 'instruments', 'kind': 'demucs',
+                            'name': preset['model'], 'shifts': preset['shifts'],
+                            'overlap': preset['overlap']})
                         # RoFormer vocals replace Demucs vocals; mix Demucs's
                         # residual "vocals" (whatever RoFormer left in the
                         # instrumental) into other so no signal is discarded
@@ -733,10 +791,18 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                               action='download_stems', quality=quality, genre=genre)
 
         if stem_files is None:
+            # Fallback discards any hybrid stage-1 result, so the recorded
+            # chain must not claim a RoFormer stage that did not contribute
+            models_used = []
             stem_files = run_demucs_stage(
                 audio_file, demucs_output, preset['model'], preset['shifts'],
                 preset['overlap'], use_flac=False,
                 progress_cb=demucs_progress_range(10, 90))
+            if stem_files is not None:
+                models_used.append({
+                    'stage': 'instruments', 'kind': 'demucs',
+                    'name': preset['model'], 'shifts': preset['shifts'],
+                    'overlap': preset['overlap']})
 
         if stem_files is None:
             write_progress('error', 'Stem separation failed',
@@ -747,59 +813,96 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
             clear_job_state()
             return
 
+        separation_seconds = round(time.time() - separation_start, 2)
+
         # Step 3: Organize output files
         write_progress('finalizing', 'Organizing stem files...', percent=92,
                       job_id=job_id, video_title=title, action='download_stems',
                       quality=quality, genre=genre)
 
-        quality_suffix = {'fast': '', 'balanced': ' (HQ)', 'ultra': ' (Ultra)'}
-        genre_suffix = {'full': 'Stems', 'hiphop': 'Hip Hop', 'rock': 'Rock'}
-        output_folder = download_dir / f"{title} - {genre_suffix.get(genre, 'Stems')}{quality_suffix.get(quality, '')}"
-        output_folder.mkdir(exist_ok=True)
+        slug = slugify(title,
+                       max_length=config.get('naming', {}).get('max_length', 80),
+                       video_id=video_id)
 
-        stem_mapping = {
-            'vocals': 'Vocals',
-            'drums': 'Drums',
-            'bass': 'Bass',
-            'other': 'Other',
-            'beat': 'Beat'
-        }
+        def _read_info(folder):
+            try:
+                return json.loads((folder / 'info.json').read_text())
+            except (OSError, ValueError):
+                return None
+
+        target, overwrite = resolve_output_folder(
+            download_dir, slug, genre, quality, read_info=_read_info)
+
+        # Assemble out of sight, then publish atomically: Ableton watches
+        # these folders and must never see a half-written one
+        staging = download_dir / f".{target.name}.tmp"
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True)
 
         copied_files = []
 
+        def _place(stem_key, source):
+            dest = staging / f"{stem_key}{source.suffix}"
+            shutil.copy2(source, dest)
+            copied_files.append({
+                'stem': stem_key,
+                'filename': dest.name,
+                'bytes': dest.stat().st_size,
+            })
+
         for stem_name in genre_mode['stems']:
             if stem_name in stem_files:
-                stem_file = stem_files[stem_name]
-                dest_name = f"{title} - {stem_mapping[stem_name]}{stem_file.suffix}"
-                dest_path = output_folder / dest_name
-                shutil.copy2(stem_file, dest_path)
-                copied_files.append(dest_name)
+                _place(stem_name, stem_files[stem_name])
 
         if 'beat' in stem_files:
             # Hybrid hiphop shortcut: the instrumental is already the beat
-            beat_file = stem_files['beat']
-            dest_name = f"{title} - Beat{beat_file.suffix}"
-            shutil.copy2(beat_file, output_folder / dest_name)
-            copied_files.append(dest_name)
+            _place('beat', stem_files['beat'])
         elif 'combine' in genre_mode:
             for combined_name, source_stems in genre_mode['combine'].items():
                 source_files = [stem_files[s] for s in source_stems if s in stem_files]
                 if source_files:
-                    combine_ext = source_files[0].suffix
-                    dest_name = f"{title} - {combined_name.title()}{combine_ext}"
-                    combined_dest = output_folder / dest_name
-                    if combine_stems(source_files, combined_dest):
-                        copied_files.append(dest_name)
+                    dest = staging / f"{combined_name}{source_files[0].suffix}"
+                    if combine_stems(source_files, dest):
+                        copied_files.append({
+                            'stem': combined_name,
+                            'filename': dest.name,
+                            'bytes': dest.stat().st_size,
+                        })
 
         # Cleanup temp directory
         shutil.rmtree(temp_dir, ignore_errors=True)
         clear_job_state()
 
         if not copied_files:
+            shutil.rmtree(staging, ignore_errors=True)
             write_progress('error', 'No stem files were created',
                           error='No output files', job_id=job_id, video_title=title,
                           action='download_stems', quality=quality, genre=genre)
             return
+
+        if config.get('write_info_json', True):
+            ext = Path(copied_files[0]['filename']).suffix.lstrip('.')
+            info = build_info(
+                song={'title': title, 'slug': slug, 'url': url,
+                      'video_id': video_id, 'duration_seconds': duration_seconds},
+                separation={'genre_mode': genre, 'quality_preset': quality,
+                            'stems': [f['stem'] for f in copied_files],
+                            'models': models_used},
+                audio={'format': ext, 'codec': ext,
+                       'sample_rate': audio_sample_rate, 'channels': audio_channels,
+                       'bit_depth': 16 if ext == 'flac' else None},
+                files=copied_files,
+                timing={'started_at': started_at,
+                        'completed_at': datetime.now(timezone.utc)
+                                        .strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        'download_seconds': download_seconds,
+                        'separation_seconds': separation_seconds,
+                        'total_seconds': round(time.time() - started_epoch, 2)},
+                environment=probe_environment(),
+            )
+            (staging / 'info.json').write_text(json.dumps(info, indent=2) + '\n')
+
+        publish_folder(staging, target, overwrite)
 
         # Success!
         write_progress('complete', f'Created {len(copied_files)} stem files', percent=100,
