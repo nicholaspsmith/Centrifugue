@@ -100,6 +100,7 @@ confirms it. Reopen the popup to see the new path.
 | `naming.style` | string | `lowercase_ascii` | Folder naming style. Only this value is supported today. |
 | `naming.max_length` | int | `80` | Maximum folder-name length before truncation. |
 | `write_info_json` | bool | `true` | Set to `false` to skip the `info.json` sidecar. |
+| `cookies_from_browser` | string | `auto` | Where yt-dlp reads YouTube cookies. `auto` scans Firefox-family profiles and picks the one with a signed-in session; or give any yt-dlp spec, e.g. `chrome` or `firefox:/path/to/profile`. |
 
 A missing or malformed config falls back to the defaults rather than failing a
 download.
@@ -247,7 +248,8 @@ centrifugue/
 │   ├── centrifugue_host.py    # Python backend
 │   ├── centrifugue_config.py  # User config (~/.centrifugue/config.json)
 │   ├── centrifugue_naming.py  # Slug, collision, atomic publish
-│   └── centrifugue_info.py    # info.json builder
+│   ├── centrifugue_info.py    # info.json builder
+│   └── centrifugue_cookies.py # Finds a signed-in browser profile for yt-dlp
 ├── tests/                  # pytest suite for the host modules
 ├── venv-demucs/            # Python venv (created by install.sh)
 ├── build-xpi.sh            # Packages extension-firefox/ into an .xpi
@@ -293,17 +295,33 @@ Make sure you've updated the Chrome native messaging manifest with your extensio
    ```
 3. Ensure the extension ID in the manifest matches your loaded extension
 
-### Download fails with 403 Forbidden
-Centrifugue uses Firefox cookies to authenticate with YouTube (required due to YouTube's bot detection). If downloads fail:
+### "Sign in to confirm you're not a bot", 403, or 429 errors
 
-1. **Make sure Firefox is your default browser** or at least has been used to browse YouTube recently
-2. **Update yt-dlp**: `brew upgrade yt-dlp`
-3. **Test directly**:
+YouTube rejects unauthenticated requests, so Centrifugue passes yt-dlp cookies
+from a browser that is signed in. It detects this automatically: every
+Firefox-family profile (Zen, Firefox, forks) is scanned for YouTube login
+cookies, and the one with a real session wins. Chromium browsers are not
+scanned automatically.
+
+If downloads fail with a sign-in or 403 error:
+
+1. **Sign in to YouTube** in Zen or Firefox, then retry — detection needs a
+   profile with an actual session.
+2. **Check which profile was picked**:
    ```bash
-   yt-dlp --cookies-from-browser firefox -x --audio-format mp3 "https://www.youtube.com/watch?v=VIDEO_ID"
+   python3 -c "import sys; sys.path.insert(0,'native-host'); \
+   from centrifugue_cookies import find_profiles, score_profile; \
+   [print(score_profile(p), p) for p in find_profiles()]"
    ```
+   A profile scoring `0` has no usable session.
+3. **Override it** by setting `cookies_from_browser` in
+   `~/.centrifugue/config.json` to any yt-dlp browser spec, e.g. `"chrome"`,
+   `"brave"`, or `"firefox:/path/to/profile"`.
+4. **Update yt-dlp**: `brew upgrade yt-dlp`
 
-> **Note:** If you see errors about "SABR streaming" or "403 Forbidden", this is a YouTube restriction. The Firefox cookies workaround should resolve it.
+A **429 Too Many Requests** usually means the wrong (signed-out) profile was
+used and YouTube rate-limited the retries. Fix the cookie source and wait a
+few minutes before trying again.
 
 ## License
 

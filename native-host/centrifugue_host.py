@@ -28,6 +28,7 @@ from centrifugue_config import (load_config, save_config, get_output_dir,
                                 parse_folder_choice)
 from centrifugue_naming import slugify, resolve_output_folder, publish_folder
 from centrifugue_info import build_info, probe_environment
+from centrifugue_cookies import resolve_cookie_spec
 
 # Ensure Homebrew binaries are in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + os.environ.get('PATH', '')
@@ -284,10 +285,14 @@ def find_ffprobe():
 def get_ytdlp_auth_args():
     """Get yt-dlp args to bypass YouTube bot detection.
 
-    Uses cookies from Firefox; the tv_embedded player client was deprecated
-    upstream and is now rejected with "Skipping unsupported client".
+    Cookies come from whichever Firefox-family profile actually holds a
+    signed-in YouTube session, detected at runtime. Hardcoding "firefox"
+    fails for anyone who browses in Zen or another fork: yt-dlp reads an
+    empty profile and YouTube answers "Sign in to confirm you're not a
+    bot". Override with the cookies_from_browser config key.
     """
-    return ['--cookies-from-browser', 'firefox']
+    spec = resolve_cookie_spec(load_config().get('cookies_from_browser'))
+    return ['--cookies-from-browser', spec]
 
 
 def get_audio_duration(file_path):

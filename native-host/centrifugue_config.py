@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "output_dir": "~/Downloads",
     "naming": {"style": "lowercase_ascii", "max_length": 80},
     "write_info_json": True,
+    "cookies_from_browser": "auto",
 }
 
 
