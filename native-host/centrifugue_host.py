@@ -24,7 +24,8 @@ import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
-from centrifugue_config import load_config, save_config, get_output_dir
+from centrifugue_config import (load_config, save_config, get_output_dir,
+                                parse_folder_choice)
 from centrifugue_naming import slugify, resolve_output_folder, publish_folder
 from centrifugue_info import build_info, probe_environment
 
@@ -1066,6 +1067,44 @@ def check_stale_job():
                       video_title=progress.get('video_title'))
 
 
+def pick_output_dir():
+    """Open a native macOS folder chooser and persist the selection.
+
+    The picker has to live here, not in the extension: WebExtensions can
+    never see an absolute filesystem path. The chosen folder is written to
+    the config by this process, because opening the dialog takes focus and
+    closes the browser popup -- nothing can be handed back to it.
+    """
+    current = Path(os.path.expanduser(str(get_output_dir())))
+    prompt = 'Choose the Centrifugue output folder'
+
+    script = f'POSIX path of (choose folder with prompt "{prompt}"'
+    if current.is_dir():
+        # Escape for AppleScript's string literal
+        safe = str(current).replace('\\', '\\\\').replace('"', '\\"')
+        script += f' default location POSIX file "{safe}"'
+    script += ')'
+
+    try:
+        result = subprocess.run(['osascript', '-e', script],
+                                capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'Folder chooser timed out'}
+    except FileNotFoundError:
+        return {'success': False, 'error': 'osascript not found (macOS only)'}
+
+    outcome = parse_folder_choice(result.returncode, result.stdout, result.stderr)
+    if not outcome.get('success'):
+        return outcome
+
+    try:
+        updated = save_config({'output_dir': outcome['output_dir']})
+    except ValueError as exc:
+        return {'success': False, 'error': str(exc)}
+
+    return {'success': True, 'output_dir': outcome['output_dir'], 'config': updated}
+
+
 def run_worker_mode(args):
     """Run as a background worker process (called with --worker flag)"""
     import argparse
@@ -1154,6 +1193,9 @@ def main():
             send_message({'success': True, 'config': updated})
         except ValueError as exc:
             send_message({'success': False, 'error': str(exc)})
+
+    elif action == 'pick_output_dir':
+        send_message(pick_output_dir())
 
     elif action == 'ping':
         send_message({'success': True, 'message': 'pong'})

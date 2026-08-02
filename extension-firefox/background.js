@@ -277,6 +277,22 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "pick_output_dir") {
+    // The native dialog steals focus and closes the popup, so the result is
+    // confirmed with a notification rather than by updating the popup
+    sendToNativeHost({ action: "pick_output_dir" })
+      .then(result => {
+        if (result && result.success) {
+          showNotification("Centrifugue", `Output folder: ${result.output_dir}`);
+        } else if (result && !result.cancelled) {
+          showNotification("Centrifugue", `Could not set folder: ${result.error}`, true);
+        }
+        sendResponse(result);
+      })
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message.action === "cancel_job") {
     // Cancel the current job
     sendToNativeHost({ action: "cancel_job" })

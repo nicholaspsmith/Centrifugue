@@ -253,17 +253,21 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings() {
+async function browseForFolder() {
   const status = document.getElementById("settingsStatus");
-  const outputDir = document.getElementById("outputDir").value.trim();
-  status.textContent = "Saving...";
+  status.textContent = "Opening folder chooser...";
   try {
-    const response = await chrome.runtime.sendMessage({
-      action: "set_config",
-      config: { output_dir: outputDir },
-    });
-    status.textContent =
-      response && response.success ? "Saved" : `Error: ${response.error}`;
+    const response = await chrome.runtime.sendMessage({ action: "pick_output_dir" });
+    // Usually unreachable: the native dialog closes this popup. The background
+    // script saves and notifies, so this only runs if the popup survived.
+    if (response && response.success) {
+      document.getElementById("outputDir").value = response.output_dir;
+      status.textContent = "Saved";
+    } else if (response && response.cancelled) {
+      status.textContent = "";
+    } else {
+      status.textContent = `Error: ${response ? response.error : "no response"}`;
+    }
   } catch (error) {
     status.textContent = `Error: ${error.message}`;
   }
@@ -273,7 +277,7 @@ async function saveSettings() {
 document.getElementById("downloadMp3Btn").addEventListener("click", downloadMP3);
 document.getElementById("downloadStemsBtn").addEventListener("click", downloadStems);
 document.getElementById("cancelBtn").addEventListener("click", cancelJob);
-document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+document.getElementById("browseBtn").addEventListener("click", browseForFolder);
 
 loadSettings();
 

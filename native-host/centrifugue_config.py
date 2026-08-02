@@ -61,6 +61,29 @@ def _validate(candidate):
             raise ValueError(f"output_dir is not writable: {path}")
 
 
+def parse_folder_choice(returncode, stdout, stderr):
+    """Interpret an osascript `choose folder` result.
+
+    Pure so the edge cases can be tested without opening a dialog. A user
+    cancelling is a normal outcome, not an error, and must be reported
+    distinctly so the UI stays quiet instead of showing a failure.
+    """
+    if returncode != 0:
+        text = (stderr or "").strip()
+        if "User canceled" in text or "-128" in text:
+            return {"success": False, "cancelled": True, "error": "Cancelled"}
+        return {"success": False, "error": text or "Folder chooser failed"}
+
+    chosen = (stdout or "").strip()
+    if not chosen:
+        return {"success": False, "cancelled": True, "error": "Cancelled"}
+
+    # `POSIX path of` appends a slash to folders; keep it only for root
+    if len(chosen) > 1:
+        chosen = chosen.rstrip("/") or "/"
+    return {"success": True, "output_dir": chosen}
+
+
 def save_config(updates):
     """Merge updates into the stored config and persist. Raises ValueError."""
     merged = _merge(load_config(), updates)

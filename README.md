@@ -77,8 +77,14 @@ This will:
 ## Configuration
 
 Settings live in `~/.centrifugue/config.json`, created with defaults on first
-run. The output folder can also be changed from the extension popup under
-**Settings** — no need to edit the file by hand.
+run. To change the output folder, open the extension popup, expand
+**Settings**, and click **Choose Folder...** — a native folder chooser opens
+and the selection is saved for you.
+
+The chooser is opened by the native host rather than the extension, because a
+browser extension can never see an absolute filesystem path. Opening it takes
+focus, which closes the popup; the choice is still saved, and a notification
+confirms it. Reopen the popup to see the new path.
 
 ```json
 {
