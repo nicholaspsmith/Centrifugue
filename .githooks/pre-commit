@@ -1,0 +1,21 @@
+#!/bin/bash
+# Rebuild the Firefox XPI when extension-firefox/ changes are committed.
+#
+# The .xpi is a frozen snapshot: editing extension-firefox/ does nothing until
+# it is rebuilt, and "Reload" in about:addons only re-reads the old archive.
+# This keeps dist/centrifugue-firefox.xpi in step with the source.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Only rebuild when the Firefox extension is actually part of this commit
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^extension-firefox/'; then
+    echo "pre-commit: extension-firefox/ changed, rebuilding XPI..."
+    if ! "$REPO_ROOT/build-xpi.sh" > /dev/null; then
+        echo "pre-commit: XPI build FAILED - commit aborted." >&2
+        echo "  Run ./build-xpi.sh to see the error." >&2
+        exit 1
+    fi
+    echo "pre-commit: dist/centrifugue-firefox.xpi rebuilt."
+fi

@@ -180,6 +180,19 @@ ln -sf "$CHROME_MANIFEST_FILE" "$BRAVE_NATIVE_DIR/com.centrifugue.stemextractor.
 echo "  [OK] Brave: $BRAVE_NATIVE_DIR (requires extension ID update)"
 
 echo
+
+# Point git at the tracked hooks so the XPI rebuilds whenever
+# extension-firefox/ is committed (.git/hooks is not version controlled)
+echo "Configuring git hooks..."
+if [ -d "$SCRIPT_DIR/.githooks" ] && git -C "$SCRIPT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+    chmod +x "$SCRIPT_DIR/.githooks/"* 2>/dev/null || true
+    git -C "$SCRIPT_DIR" config core.hooksPath .githooks
+    echo "  [OK] core.hooksPath -> .githooks (auto-rebuilds the XPI on commit)"
+else
+    echo "  [SKIP] not a git checkout, or .githooks missing"
+fi
+
+echo
 echo "=========================================="
 echo "  Installation Complete!"
 echo "=========================================="
