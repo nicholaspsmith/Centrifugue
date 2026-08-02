@@ -10,6 +10,19 @@
         ],
         "matcher": ""
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r \".tool_input.file_path // .tool_response.filePath // empty\" | { read -r f; case \"$f\" in */extension-firefox/*) \"${CLAUDE_PROJECT_DIR:-.}/build-xpi.sh\" > /dev/null 2>&1 || echo \"{\\\"systemMessage\\\":\\\"XPI rebuild FAILED - run ./build-xpi.sh to see the error\\\"}\" ;; esac; }",
+            "statusMessage": "Rebuilding Firefox XPI...",
+            "timeout": 60
+          }
+        ]
+      }
     ]
   }
 }
