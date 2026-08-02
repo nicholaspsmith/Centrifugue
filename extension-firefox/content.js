@@ -351,7 +351,14 @@ function injectStyles() {
     #centrifugue-cancel-btn:hover {
       background: #555;
     }
-  `;
+  
+  #centrifugue-queue { margin-top: 10px; }
+  .centrifugue-queue-row { border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px; margin-bottom: 6px; }
+  .centrifugue-queue-title { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .centrifugue-queue-meta { font-size: 10px; opacity: 0.7; margin-top: 2px; }
+  .centrifugue-queue-actions { margin-top: 4px; display: flex; gap: 4px; }
+  .centrifugue-queue-actions button { font-size: 10px; padding: 2px 6px; cursor: pointer; }
+`;
   document.head.appendChild(styles);
 }
 
@@ -396,6 +403,11 @@ function createMenu() {
           <div class="centrifugue-progress-text" id="centrifugue-progress-text">Starting...</div>
         </div>
         <button id="centrifugue-cancel-btn">Cancel</button>
+      </div>
+
+      <div id="centrifugue-queue" style="display: none;">
+        <div class="centrifugue-section-title">Queue</div>
+        <div id="centrifugue-queue-list"></div>
       </div>
 
       <div id="centrifugue-download-options">
@@ -567,6 +579,8 @@ function showProgressInMenu(progress) {
     floatingButton.classList.add("processing");
     floatingButton.innerHTML = `${percent}%`;
   }
+
+  refreshQueuePanel();
 }
 
 function hideProgressInMenu() {
@@ -809,3 +823,74 @@ new MutationObserver(() => {
 initialize();
 
 console.log("Centrifugue content script loaded");
+
+const CENTRIFUGUE_STATUS_LABEL = {
+  queued: "Queued", running: "Running", paused: "Paused",
+  complete: "Done", error: "Failed", cancelled: "Cancelled",
+};
+
+async function refreshQueuePanel() {
+  const container = document.getElementById("centrifugue-queue");
+  const list = document.getElementById("centrifugue-queue-list");
+  if (!container || !list) return;
+
+  let response;
+  try {
+    response = await browser.runtime.sendMessage({ action: "get_queue" });
+  } catch (error) {
+    return;
+  }
+  if (!response || !response.success) return;
+
+  const jobs = response.jobs || [];
+  container.style.display = jobs.length ? "block" : "none";
+  list.textContent = "";
+
+  for (const job of jobs) {
+    const progress = job.progress || {};
+    const row = document.createElement("div");
+    row.className = "centrifugue-queue-row";
+
+    const title = document.createElement("div");
+    title.className = "centrifugue-queue-title";
+    title.textContent = job.title;
+    row.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "centrifugue-queue-meta";
+    meta.textContent =
+      `${CENTRIFUGUE_STATUS_LABEL[job.status] || job.status}` +
+      (job.status === "running" && progress.percent != null
+        ? ` - ${progress.percent}%` : "");
+    row.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "centrifugue-queue-actions";
+    if (job.status === "running" || job.status === "queued") {
+      actions.appendChild(makeQueueButton("Pause", "pause_job", job.job_id));
+    }
+    if (job.status === "paused") {
+      actions.appendChild(makeQueueButton("Resume", "resume_job", job.job_id));
+    }
+    actions.appendChild(makeQueueButton("Remove", "remove_job", job.job_id));
+    row.appendChild(actions);
+
+    list.appendChild(row);
+  }
+}
+
+function makeQueueButton(label, action, jobId) {
+  const button = document.createElement("button");
+  button.textContent = label;
+  button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    button.disabled = true;
+    try {
+      await browser.runtime.sendMessage({ action, job_id: jobId });
+    } catch (error) {
+      // A failed control action must not break the panel
+    }
+    await refreshQueuePanel();
+  });
+  return button;
+}

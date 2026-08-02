@@ -273,6 +273,97 @@ async function browseForFolder() {
   }
 }
 
+const STATUS_LABEL = {
+  queued: "Queued", running: "Running", paused: "Paused",
+  complete: "Done", error: "Failed", cancelled: "Cancelled",
+};
+
+async function refreshQueue() {
+  let response;
+  try {
+    response = await browser.runtime.sendMessage({ action: "get_queue" });
+  } catch (error) {
+    return;
+  }
+  const list = document.getElementById("queueList");
+  const count = document.getElementById("queueCount");
+  if (!response || !response.success || !list) return;
+
+  const jobs = response.jobs || [];
+  const pending = jobs.filter(j => j.status === "queued").length;
+  count.textContent = pending ? `(${pending} waiting)` : "";
+
+  if (!jobs.length) {
+    list.textContent = "";
+    const empty = document.createElement("div");
+    empty.className = "queue-empty";
+    empty.textContent = "Nothing queued.";
+    list.appendChild(empty);
+    return;
+  }
+
+  list.textContent = "";
+  for (const job of jobs) {
+    const progress = job.progress || {};
+    const row = document.createElement("div");
+    row.className = "queue-row";
+
+    const title = document.createElement("div");
+    title.className = "queue-title";
+    title.textContent = job.title;
+    row.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "queue-meta";
+    meta.textContent = `${STATUS_LABEL[job.status] || job.status} - ` +
+      `${job.genre}/${job.quality}` +
+      (job.status === "running" && progress.message ? ` - ${progress.message}` : "") +
+      (job.status === "error" && job.error ? ` - ${job.error}` : "");
+    row.appendChild(meta);
+
+    if (job.status === "running" || job.status === "paused") {
+      const outer = document.createElement("div");
+      outer.className = "queue-bar-outer";
+      const inner = document.createElement("div");
+      inner.className = "queue-bar-inner";
+      inner.style.width = `${progress.percent || 0}%`;
+      outer.appendChild(inner);
+      row.appendChild(outer);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "queue-actions";
+    if (job.status === "running" || job.status === "queued") {
+      actions.appendChild(queueButton("Pause", "pause_job", job.job_id));
+    }
+    if (job.status === "paused") {
+      actions.appendChild(queueButton("Resume", "resume_job", job.job_id));
+    }
+    actions.appendChild(queueButton("Remove", "remove_job", job.job_id));
+    row.appendChild(actions);
+
+    list.appendChild(row);
+  }
+}
+
+function queueButton(label, action, jobId) {
+  const button = document.createElement("button");
+  button.textContent = label;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const result = await browser.runtime.sendMessage({ action, job_id: jobId });
+      if (result && !result.success) {
+        updateStatus(`Error: ${result.error}`, "error");
+      }
+    } catch (error) {
+      updateStatus(`Error: ${error.message}`, "error");
+    }
+    await refreshQueue();
+  });
+  return button;
+}
+
 // Event listeners
 document.getElementById("downloadMp3Btn").addEventListener("click", downloadMP3);
 document.getElementById("downloadStemsBtn").addEventListener("click", downloadStems);
@@ -280,6 +371,8 @@ document.getElementById("cancelBtn").addEventListener("click", cancelJob);
 document.getElementById("browseBtn").addEventListener("click", browseForFolder);
 
 loadSettings();
+refreshQueue();
+setInterval(refreshQueue, 2000);
 
 // Initialize
 checkActiveJob().then(hasActiveJob => {

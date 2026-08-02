@@ -277,6 +277,20 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "get_queue") {
+    sendToNativeHost({ action: "get_queue" })
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (["pause_job", "resume_job", "remove_job"].includes(message.action)) {
+    sendToNativeHost({ action: message.action, job_id: message.job_id })
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message.action === "pick_output_dir") {
     // The native dialog steals focus and closes the popup, so the result is
     // confirmed with a notification rather than by updating the popup
