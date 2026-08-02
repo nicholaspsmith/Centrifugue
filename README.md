@@ -101,6 +101,27 @@ confirms it. Reopen the popup to see the new path.
 | `naming.max_length` | int | `80` | Maximum folder-name length before truncation. |
 | `write_info_json` | bool | `true` | Set to `false` to skip the `info.json` sidecar. |
 | `cookies_from_browser` | string | `auto` | Where yt-dlp reads YouTube cookies. `auto` scans Firefox-family profiles and picks the one with a signed-in session; or give any yt-dlp spec, e.g. `chrome` or `firefox:/path/to/profile`. |
+| `max_paused_jobs` | int | `2` | Most conversions that may be paused at once. A paused job stays in memory (including GPU memory), so this is capped deliberately. `0` disables pausing. |
+
+### Queue
+
+Songs are appended to a queue and converted one at a time. Add as many as you
+like — there is no need to wait for the current one to finish.
+
+The queue is visible and controllable from both the extension popup and the
+floating menu on YouTube. Each entry shows its status and offers **Pause**,
+**Resume**, and **Remove**.
+
+- **Pausing** the running conversion freezes it and starts the next song. The
+  paused job keeps every bit of its progress — a run nine minutes in resumes
+  nine minutes in, not from scratch.
+- **Resuming** puts the job back in line; it continues the moment the slot is
+  free.
+- The queue keeps moving with the browser closed: each worker starts the next
+  song as it exits.
+
+Paused jobs do not survive a reboot, and a frozen job still holds its RAM and
+GPU memory — which is what `max_paused_jobs` guards against.
 
 A missing or malformed config falls back to the defaults rather than failing a
 download.
@@ -249,7 +270,8 @@ centrifugue/
 │   ├── centrifugue_config.py  # User config (~/.centrifugue/config.json)
 │   ├── centrifugue_naming.py  # Slug, collision, atomic publish
 │   ├── centrifugue_info.py    # info.json builder
-│   └── centrifugue_cookies.py # Finds a signed-in browser profile for yt-dlp
+│   ├── centrifugue_cookies.py # Finds a signed-in browser profile for yt-dlp
+│   └── centrifugue_queue.py   # Job queue, scheduler, pause/resume
 ├── tests/                  # pytest suite for the host modules
 ├── venv-demucs/            # Python venv (created by install.sh)
 ├── build-xpi.sh            # Packages extension-firefox/ into an .xpi
@@ -272,6 +294,13 @@ Make sure you've updated the Chrome native messaging manifest with your extensio
 1. Go to `chrome://extensions` and copy your extension ID
 2. Edit `native-host/com.centrifugue.stemextractor.chrome.json`
 3. Replace `YOUR_EXTENSION_ID_HERE` with your extension ID
+
+### A paused job is using memory
+
+Pausing freezes the process rather than stopping it, so progress is kept but
+RAM and GPU memory stay allocated. That is why `max_paused_jobs` defaults to
+2. Remove a paused job instead of pausing it if you need the memory back.
+Paused jobs do not survive a reboot.
 
 ### Slow processing
 - Use the "Fast" quality preset for quicker results
