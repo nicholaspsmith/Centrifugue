@@ -29,6 +29,7 @@ from centrifugue_config import (load_config, save_config, get_output_dir,
 from centrifugue_naming import slugify, resolve_output_folder, publish_folder
 from centrifugue_info import build_info, probe_environment
 from centrifugue_cookies import resolve_cookie_spec
+import centrifugue_queue as jobq
 
 # Ensure Homebrew binaries are in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + os.environ.get('PATH', '')
@@ -137,6 +138,14 @@ def write_progress(stage, message, percent=0, estimated_seconds=None, video_titl
             json.dump(progress, f)
     except:
         pass
+
+    # Per-job file too: the queue needs one writer per job so a worker can
+    # never clobber a concurrent pause or enqueue in the shared queue file
+    if job_id:
+        try:
+            jobq.write_job_progress(job_id, progress)
+        except Exception:
+            pass
 
 
 def read_progress():
@@ -922,73 +931,55 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
         clear_job_state()
 
 
-def start_stems_job(url, quality='fast', genre='full'):
-    """Start a stem separation job as an independent background subprocess"""
-    global active_job
+def spawn_worker(job):
+    """Launch a detached worker for a queued job; returns its pid.
 
-    # Check if there's already an active job
-    progress = read_progress()
-    if progress.get('stage') in ['downloading', 'processing', 'finalizing']:
-        # Verify the job is actually still running
-        job_state = load_job_state()
-        if job_state:
-            pid = job_state.get('pid')
-            if pid:
-                try:
-                    os.kill(pid, 0)  # Check if process exists
-                    return {
-                        'success': False,
-                        'error': 'A job is already running. Please wait for it to complete or cancel it.',
-                        'job_id': progress.get('job_id')
-                    }
-                except OSError:
-                    # Process is dead, clean up the stale state
-                    clear_job_state()
-                    clear_progress()
-
-    # Get video title
-    title = get_video_title(url) or "stems"
-
-    # Generate job ID
-    job_id = f"job_{int(time.time())}"
-    active_job = job_id
-
-    # Spawn a completely independent subprocess to do the work
-    # This process will continue running even after the native host exits
+    start_new_session makes the worker its own process-group leader, which
+    is what lets pause/resume/cancel signal the whole chain (worker plus
+    yt-dlp plus Demucs) with a single killpg.
+    """
     worker_cmd = [
-        sys.executable,  # Use the same Python interpreter
-        SCRIPT_PATH,
-        '--worker',
-        '--job-id', job_id,
-        '--url', url,
-        '--quality', quality,
-        '--genre', genre,
-        '--title', title
+        sys.executable, SCRIPT_PATH, '--worker',
+        '--job-id', job['job_id'],
+        '--url', job['url'],
+        '--quality', job['quality'],
+        '--genre', job['genre'],
+        '--title', job['title'],
     ]
-
-    # Start the worker as a fully detached subprocess
-    # On Unix, we use start_new_session to detach from the parent
-    worker_process = subprocess.Popen(
+    proc = subprocess.Popen(
         worker_cmd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
-        start_new_session=True  # Detach from parent process group
+        start_new_session=True,
     )
-
-    # Save job state with the WORKER's PID (not the native host PID)
-    save_job_state(job_id, worker_process.pid, None, title, 'download_stems', quality, genre, url)
-
-    # Write initial progress
     write_progress('downloading', 'Starting...', percent=0,
-                  job_id=job_id, video_title=title, action='download_stems',
-                  quality=quality, genre=genre)
+                   job_id=job['job_id'], video_title=job['title'],
+                   action='download_stems',
+                   quality=job['quality'], genre=job['genre'])
+    return proc.pid
+
+
+def start_stems_job(url, quality='fast', genre='full'):
+    """Append a job to the queue and start it if the slot is free."""
+    title = get_video_title(url) or "stems"
+    # Milliseconds: two songs queued in the same second would otherwise collide
+    job_id = f"job_{int(time.time() * 1000)}"
+
+    def add(queue):
+        queue['jobs'].append(jobq.make_job(job_id, url, title, quality, genre))
+
+    jobq.mutate_queue(add)
+    queue = jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+
+    job = jobq.find_job(queue, job_id)
+    started = bool(job and job.get('status') == 'running')
 
     return {
         'success': True,
         'job_id': job_id,
         'video_title': title,
-        'message': 'Stem separation started'
+        'queued': not started,
+        'message': 'Stem separation started' if started else 'Added to queue',
     }
 
 
@@ -1131,6 +1122,24 @@ def run_worker_mode(args):
         parsed.title
     )
 
+    # Advance the queue ourselves: the host is not running, and this is the
+    # only thing that keeps the queue moving with the browser closed
+    try:
+        jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+    except Exception:
+        pass
+
+
+def adopt_legacy_job():
+    """One-time import of a pre-queue job so it is not orphaned."""
+    if jobq.get_queue_path().exists():
+        return
+    job = jobq.migrate_legacy_job(load_job_state())
+    queue = jobq.empty_queue()
+    if job:
+        queue['jobs'].append(job)
+    jobq.save_queue(queue)
+
 
 def main():
     """Main entry point"""
@@ -1140,6 +1149,7 @@ def main():
         return
 
     # Check for stale jobs on startup
+    adopt_legacy_job()
     check_stale_job()
 
     message = read_message()
@@ -1198,6 +1208,34 @@ def main():
             send_message({'success': True, 'config': updated})
         except ValueError as exc:
             send_message({'success': False, 'error': str(exc)})
+
+    elif action == 'get_queue':
+        queue = jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+        jobs = []
+        for job in queue['jobs']:
+            merged = dict(job)
+            merged['progress'] = jobq.read_job_progress(job['job_id'])
+            jobs.append(merged)
+        send_message({'success': True, 'jobs': jobs})
+
+    elif action == 'pause_job':
+        limit = load_config().get('max_paused_jobs', 2)
+        result = jobq.pause_job(message.get('job_id'), max_paused=limit)
+        if result.get('success'):
+            jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+        send_message(result)
+
+    elif action == 'resume_job':
+        result = jobq.resume_job(message.get('job_id'))
+        if result.get('success'):
+            jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+        send_message(result)
+
+    elif action == 'remove_job':
+        result = jobq.remove_job(message.get('job_id'))
+        if result.get('success'):
+            jobq.tick(spawn=spawn_worker, cont=jobq.cont_group)
+        send_message(result)
 
     elif action == 'pick_output_dir':
         send_message(pick_output_dir())

@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "naming": {"style": "lowercase_ascii", "max_length": 80},
     "write_info_json": True,
     "cookies_from_browser": "auto",
+    "max_paused_jobs": 2,
 }
 
 
