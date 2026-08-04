@@ -132,3 +132,53 @@ def test_tick_reaps_then_schedules():
     assert statuses["a"] == "error"
     assert statuses["b"] == "running"
     assert rec.spawned == ["b"]
+
+
+# --- Regression: a worker cannot reap itself -------------------------------
+# reap() skips live PIDs and the worker is still alive while it ticks, so
+# without finish_job() the job stays 'running' and the queue stalls forever.
+
+def test_finish_job_marks_complete_from_progress():
+    q.save_queue(_queue(_job("a", status="running", pid=1)))
+    q.finish_job("a", progress={"stage": "complete"})
+    job = q.find_job(q.load_queue(), "a")
+    assert job["status"] == "complete"
+    assert job["pid"] is None
+    assert job["finished_at"] is not None
+
+
+def test_finish_job_marks_error_with_message():
+    q.save_queue(_queue(_job("a", status="running", pid=1)))
+    q.finish_job("a", progress={"stage": "error", "error": "download failed"})
+    job = q.find_job(q.load_queue(), "a")
+    assert job["status"] == "error"
+    assert job["error"] == "download failed"
+
+
+def test_finish_job_on_removed_job_is_a_noop():
+    q.save_queue(_queue())
+    assert q.finish_job("gone", progress={"stage": "complete"}) is None
+
+
+def test_worker_finishing_lets_the_next_job_start_while_it_is_still_alive():
+    # The failure this reproduces: worker for 'a' is finishing but its own
+    # process is still alive, so reap() cannot touch it.
+    q.save_queue(_queue(_job("a", status="running", pid=1), _job("b")))
+    rec = Recorder(next_pid=99)
+
+    q.finish_job("a", progress={"stage": "error", "message": "boom"})
+    q.tick(spawn=rec.spawn, cont=rec.cont)
+
+    statuses = {j["job_id"]: j["status"] for j in q.load_queue()["jobs"]}
+    assert statuses["a"] == "error"
+    assert statuses["b"] == "running", "queue must advance when a worker finishes"
+    assert rec.spawned == ["b"]
+
+
+def test_without_finish_a_live_worker_blocks_scheduling():
+    # Documents why finish_job exists: tick alone cannot advance here.
+    q.save_queue(_queue(_job("a", status="running", pid=1), _job("b")))
+    rec = Recorder()
+    queue = q.load_queue()
+    q.reap(queue, alive=lambda pid: True, progress=lambda jid: {})
+    assert q.schedule(queue, rec.spawn, rec.cont, alive=lambda pid: True) is None

@@ -151,6 +151,36 @@ def reap(queue, alive=is_alive, progress=read_job_progress):
         job["finished_at"] = time.time()
 
 
+def finish_job(job_id, progress=None):
+    """Mark a job terminal from inside its own worker.
+
+    A worker cannot reap itself: reap() skips jobs whose PID is alive, and
+    the worker is still alive while it advances the queue. Without this the
+    job stays 'running', schedule() refuses to start anything else, and the
+    queue stalls until some other caller happens to tick.
+    """
+    latest = progress if progress is not None else read_job_progress(job_id)
+
+    def run(queue):
+        job = find_job(queue, job_id)
+        if job is None:
+            # Removed while it ran; nothing to finalise
+            return None
+        stage = (latest or {}).get("stage")
+        if stage == "complete":
+            job["status"] = "complete"
+        else:
+            job["status"] = "error"
+            job["error"] = ((latest or {}).get("error")
+                            or (latest or {}).get("message")
+                            or "Worker exited unexpectedly")
+        job["pid"] = None
+        job["finished_at"] = time.time()
+        return job
+
+    return mutate_queue(run)
+
+
 def schedule(queue, spawn, cont, alive=is_alive):
     """Start at most one job. Returns the job started, or None."""
     if any(job["status"] == "running" for job in queue["jobs"]):

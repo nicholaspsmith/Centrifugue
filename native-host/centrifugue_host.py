@@ -1122,6 +1122,13 @@ def run_worker_mode(args):
         parsed.title
     )
 
+    # Finalise our own job first: reap() cannot touch it while this process
+    # is still alive, so without this the queue would stay blocked on it
+    try:
+        jobq.finish_job(parsed.job_id)
+    except Exception:
+        pass
+
     # Advance the queue ourselves: the host is not running, and this is the
     # only thing that keeps the queue moving with the browser closed
     try:
