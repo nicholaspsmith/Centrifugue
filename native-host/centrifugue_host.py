@@ -28,7 +28,7 @@ from centrifugue_config import (load_config, save_config, get_output_dir,
                                 parse_folder_choice)
 from centrifugue_naming import slugify, resolve_output_folder, publish_folder
 from centrifugue_info import build_info, probe_environment
-from centrifugue_cookies import resolve_cookie_spec
+from centrifugue_cookies import resolve_cookie_spec, find_profiles, score_profile
 import centrifugue_queue as jobq
 
 # Ensure Homebrew binaries are in PATH
@@ -291,6 +291,22 @@ def find_ffprobe():
     return None
 
 
+def log_debug(message):
+    """Append a diagnostic line to ~/.centrifugue/debug.log. Never raises.
+
+    The host runs as a child of the browser, where the environment can
+    differ from a shell in ways that are otherwise invisible.
+    """
+    try:
+        path = Path.home() / '.centrifugue' / 'debug.log'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        with open(path, 'a') as handle:
+            handle.write(f"{stamp} [{os.getpid()}] {message}\n")
+    except Exception:
+        pass
+
+
 def get_ytdlp_auth_args():
     """Get yt-dlp args to bypass YouTube bot detection.
 
@@ -300,7 +316,14 @@ def get_ytdlp_auth_args():
     empty profile and YouTube answers "Sign in to confirm you're not a
     bot". Override with the cookies_from_browser config key.
     """
-    spec = resolve_cookie_spec(load_config().get('cookies_from_browser'))
+    configured = load_config().get('cookies_from_browser')
+    spec = resolve_cookie_spec(configured)
+    try:
+        scores = [(p.name, score_profile(p)) for p in find_profiles()]
+    except Exception as exc:
+        scores = f"find_profiles failed: {exc!r}"
+    log_debug(f"cookies configured={configured!r} resolved={spec!r} "
+              f"HOME={os.environ.get('HOME')!r} profiles={scores}")
     return ['--cookies-from-browser', spec]
 
 
@@ -354,8 +377,10 @@ def get_video_title(url):
         )
         if result.returncode == 0:
             return sanitize_filename(result.stdout.strip())
-    except:
-        pass
+        log_debug(f"get_video_title rc={result.returncode} "
+                  f"stderr={(result.stderr or '').strip()[:400]!r}")
+    except Exception as exc:
+        log_debug(f"get_video_title raised {exc!r}")
     return None
 
 
