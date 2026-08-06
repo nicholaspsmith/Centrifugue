@@ -353,11 +353,21 @@ function injectStyles() {
     }
   
   #centrifugue-queue { margin-top: 10px; }
-  .centrifugue-queue-row { border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px; margin-bottom: 6px; }
-  .centrifugue-queue-title { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .centrifugue-queue-meta { font-size: 10px; opacity: 0.7; margin-top: 2px; }
+  #centrifugue-queue { color: #fff; }
+  .centrifugue-queue-row { border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px; margin-bottom: 6px; background: #222; }
+  .centrifugue-queue-title { font-size: 11px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .centrifugue-queue-meta { font-size: 10px; color: #bbb; margin-top: 2px; }
   .centrifugue-queue-actions { margin-top: 4px; display: flex; gap: 4px; }
-  .centrifugue-queue-actions button { font-size: 10px; padding: 2px 6px; cursor: pointer; }
+  .centrifugue-queue-actions button { font-size: 10px; padding: 2px 6px; cursor: pointer; background: #444; color: #fff; border: none; border-radius: 4px; }
+  .centrifugue-queue-actions button:hover:not(:disabled) { background: #555; }
+  .centrifugue-queue-actions button:disabled { opacity: 0.5; cursor: default; }
+  #centrifugue-queue .centrifugue-section-title { color: #888; }
+
+  /* Fullscreen video: get the whole UI out of the way */
+  body:fullscreen #centrifugue-floating-btn,
+  body:fullscreen #centrifugue-menu,
+  body:fullscreen #centrifugue-status,
+  .centrifugue-hidden-fullscreen { display: none !important; }
 `;
   document.head.appendChild(styles);
 }
@@ -894,3 +904,24 @@ function makeQueueButton(label, action, jobId) {
   });
   return button;
 }
+
+
+// YouTube fullscreen should not have our UI floating over the video. The
+// :fullscreen CSS rule covers the usual case; this also handles YouTube's
+// own fullscreen handling, which does not always put body in :fullscreen.
+function centrifugueIsFullscreen() {
+  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function updateFullscreenVisibility() {
+  const hidden = centrifugueIsFullscreen();
+  for (const el of [floatingButton, menuElement, statusElement]) {
+    if (el) el.classList.toggle("centrifugue-hidden-fullscreen", hidden);
+  }
+  if (hidden && isMenuOpen) {
+    closeMenu();
+  }
+}
+
+document.addEventListener("fullscreenchange", updateFullscreenVisibility);
+document.addEventListener("webkitfullscreenchange", updateFullscreenVisibility);

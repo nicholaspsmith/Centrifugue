@@ -107,3 +107,44 @@ def test_count_paused_counts_only_paused():
         _job("c", status="paused", pid=3),
     ]}
     assert q.count_paused(queue) == 2
+
+
+# --- Terminal jobs must not accumulate forever ------------------------------
+
+def test_clear_finished_removes_terminal_jobs_only():
+    _seed(_job("a", status="complete"), _job("b", status="running", pid=1),
+          _job("c", status="error"), _job("d"))
+    result = q.clear_finished()
+    assert result["success"] is True
+    assert result["removed"] == 2
+    assert sorted(j["job_id"] for j in q.load_queue()["jobs"]) == ["b", "d"]
+
+
+def test_clear_finished_on_empty_queue_is_fine():
+    _seed()
+    assert q.clear_finished()["removed"] == 0
+
+
+def test_prune_drops_terminal_jobs_older_than_the_cutoff():
+    import time as _t
+    old = _job("old", status="complete"); old["finished_at"] = _t.time() - 90000
+    fresh = _job("fresh", status="complete"); fresh["finished_at"] = _t.time()
+    queue = {"schema_version": 1, "jobs": [old, fresh]}
+    q.prune(queue, max_age_seconds=86400)
+    assert [j["job_id"] for j in queue["jobs"]] == ["fresh"]
+
+
+def test_prune_never_drops_active_jobs():
+    import time as _t
+    stale_running = _job("r", status="running", pid=1)
+    stale_running["added_at"] = _t.time() - 900000
+    queue = {"schema_version": 1, "jobs": [stale_running]}
+    q.prune(queue, max_age_seconds=86400)
+    assert [j["job_id"] for j in queue["jobs"]] == ["r"]
+
+
+def test_prune_keeps_terminal_jobs_without_a_finish_time():
+    orphan = _job("o", status="error")
+    queue = {"schema_version": 1, "jobs": [orphan]}
+    q.prune(queue, max_age_seconds=86400)
+    assert [j["job_id"] for j in queue["jobs"]] == ["o"]

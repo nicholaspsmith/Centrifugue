@@ -151,6 +151,38 @@ def reap(queue, alive=is_alive, progress=read_job_progress):
         job["finished_at"] = time.time()
 
 
+DEFAULT_MAX_AGE_SECONDS = 86400  # a day
+
+
+def prune(queue, max_age_seconds=DEFAULT_MAX_AGE_SECONDS):
+    """Drop finished jobs that are old enough to be clutter.
+
+    Only terminal jobs are eligible, and only ones that recorded when they
+    finished -- an active job must never be pruned out from under its
+    running worker.
+    """
+    cutoff = time.time() - max_age_seconds
+    kept = []
+    for job in queue["jobs"]:
+        if job["status"] in TERMINAL_STATUSES:
+            finished = job.get("finished_at")
+            if finished and finished < cutoff:
+                continue
+        kept.append(job)
+    queue["jobs"] = kept
+
+
+def clear_finished():
+    """Remove every terminal job. Returns how many were dropped."""
+    def run(queue):
+        before = len(queue["jobs"])
+        queue["jobs"] = [j for j in queue["jobs"]
+                         if j["status"] not in TERMINAL_STATUSES]
+        return {"success": True, "removed": before - len(queue["jobs"])}
+
+    return mutate_queue(run)
+
+
 def finish_job(job_id, progress=None):
     """Mark a job terminal from inside its own worker.
 
@@ -205,6 +237,7 @@ def tick(spawn=None, cont=None):
     """Reap dead jobs and start the next one. Returns the updated queue."""
     def run(queue):
         reap(queue)
+        prune(queue)
         if spawn is not None and cont is not None:
             schedule(queue, spawn, cont)
         return queue

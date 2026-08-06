@@ -1250,6 +1250,10 @@ def main():
             jobs.append(merged)
         send_message({'success': True, 'jobs': jobs})
 
+    elif action == 'clear_finished':
+        result = jobq.clear_finished()
+        send_message(result)
+
     elif action == 'pause_job':
         limit = load_config().get('max_paused_jobs', 2)
         result = jobq.pause_job(message.get('job_id'), max_paused=limit)
