@@ -1,5 +1,6 @@
 """Builds the info.json sidecar describing how a render was produced."""
 
+import json
 import platform
 import subprocess
 
@@ -45,9 +46,65 @@ def _torch_device():
         return None
 
 
-def probe_environment():
-    """Best-effort version probe. Never raises; unknowns are None."""
-    return {
+_VENV_PROBE = (
+    "import json\n"
+    "out = {}\n"
+    "try:\n"
+    "    import importlib.metadata as md\n"
+    "    for name in ('demucs', 'audio-separator', 'torch'):\n"
+    "        try: out[name] = md.version(name)\n"
+    "        except Exception: out[name] = None\n"
+    "except Exception:\n"
+    "    pass\n"
+    "try:\n"
+    "    import torch\n"
+    "    if torch.backends.mps.is_available(): out['device'] = 'mps'\n"
+    "    elif torch.cuda.is_available(): out['device'] = 'cuda'\n"
+    "    else: out['device'] = 'cpu'\n"
+    "except Exception:\n"
+    "    out['device'] = None\n"
+    "print(json.dumps(out))\n"
+)
+
+
+def parse_venv_probe(stdout):
+    """Turn the probe's JSON into our key names. Never raises."""
+    try:
+        raw = json.loads(stdout)
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for src, dest in (("demucs", "demucs"), ("torch", "torch"),
+                      ("audio-separator", "audio_separator"),
+                      ("device", "device")):
+        if src in raw:
+            out[dest] = raw[src]
+    return out
+
+
+def _run_venv_probe(venv_python):
+    """Ask the Demucs venv about itself. Never raises."""
+    try:
+        result = subprocess.run([str(venv_python), "-c", _VENV_PROBE],
+                                capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            return {}
+        return parse_venv_probe(result.stdout)
+    except Exception:
+        return {}
+
+
+def probe_environment(venv_python=None):
+    """Best-effort version probe. Never raises; unknowns are None.
+
+    demucs, torch, audio-separator and the compute device live in the
+    Demucs venv, not in the interpreter running this host -- which is the
+    system python when the browser spawns us, and cannot import any of
+    them. Probing through the venv is the only way to record real values.
+    """
+    env = {
         "centrifugue_version": CENTRIFUGUE_VERSION,
         "python": platform.python_version(),
         "platform": f"{platform.system()}-{platform.release()}-{platform.machine()}",
@@ -57,6 +114,9 @@ def probe_environment():
         "torch": _module_version("torch"),
         "yt_dlp": _binary_version("yt-dlp"),
     }
+    if venv_python:
+        env.update(_run_venv_probe(venv_python))
+    return env
 
 
 def build_info(song, separation, audio, files, timing, environment=None):

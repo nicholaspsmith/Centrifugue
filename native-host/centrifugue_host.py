@@ -938,7 +938,7 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                         'download_seconds': download_seconds,
                         'separation_seconds': separation_seconds,
                         'total_seconds': round(time.time() - started_epoch, 2)},
-                environment=probe_environment(),
+                environment=probe_environment(venv_python=DEMUCS_PYTHON),
             )
             (staging / 'info.json').write_text(json.dumps(info, indent=2) + '\n')
 
