@@ -23,7 +23,11 @@ def slugify(title, max_length=DEFAULT_MAX_LENGTH, video_id=None):
     """
     text = unicodedata.normalize("NFKD", title or "")
     text = "".join(c for c in text if not unicodedata.combining(c))
-    text = text.encode("ascii", "ignore").decode("ascii")
+    # Replace anything still non-ASCII rather than deleting it: dropping an
+    # em-dash silently glues the words either side of it together, turning
+    # "C-Buckethead's Pike" into "cbuckethead_s_pike". Accents have already
+    # decomposed to ASCII above, so only genuinely foreign characters here.
+    text = "".join(c if ord(c) < 128 else "_" for c in text)
     text = text.lower()
 
     text = re.sub(r"[^a-z0-9_-]", "_", text)

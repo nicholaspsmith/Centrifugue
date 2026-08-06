@@ -108,3 +108,20 @@ def test_variant_with_matching_settings_overwrites(tmp_path):
         tmp_path, "song", "rock", "ultra", read_info=reader)
     assert target == tmp_path / "song_rock_ultra"
     assert overwrite is True
+
+
+# --- Regression: dropping a non-ASCII char must not glue words together ----
+# "C—Buckethead's Pike 65" used to slug as "cbuckethead_s_pike_65" because
+# the em-dash was deleted rather than replaced with a separator.
+
+def test_dropped_non_ascii_becomes_a_separator():
+    assert slugify("C—Buckethead's Pike 65") == "c_buckethead_s_pike_65"
+
+
+def test_non_ascii_between_words_separates_them():
+    assert slugify("Artist・Title") == "artist_title"
+
+
+def test_transliterated_accents_still_join_normally():
+    # é decomposes to an ASCII 'e', so it must NOT become a separator
+    assert slugify("Café") == "cafe"
