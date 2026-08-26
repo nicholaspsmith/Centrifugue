@@ -103,6 +103,9 @@ Follow the project principles defined in `.specify/memory/constitution.md`:
 | File | Purpose |
 |------|---------|
 | `native-host/centrifugue_host.py` | Core stem separation logic, native messaging |
+| `native-host/centrifugue_analysis.py` | Key/BPM detection; pure naming helpers. Runs under the Demucs venv |
+| `native-host/centrifugue_ableton.py` | `.als` Live Set + `.alc` Live Clip writers, `.asd` warp-marker reader |
+| `native-host/centrifugue_postprocess.py` | Post-separation pipeline: rename, tag, write sidecars |
 | `extension-firefox/background.js` | Progress polling, native messaging bridge |
 | `extension-firefox/content.js` | YouTube floating UI, status display |
 | `extension-firefox/popup/popup.html` | Extension popup interface |

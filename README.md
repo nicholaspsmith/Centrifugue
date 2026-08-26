@@ -133,11 +133,19 @@ Stems are named by stem type:
 
 ```
 ~/Downloads/rockhard_foolio/
-├── vocals.flac
-├── drums.flac
-├── bass.flac
+├── vocals_157bpm_C#min.flac
+├── drums_157bpm_C#min.flac
+├── bass_157bpm_C#min.flac
+├── vocals.alc
+├── drums.alc
+├── bass.alc
+├── rockhard_foolio.als
 └── info.json
 ```
+
+The `_157bpm_C#min` tail, the `.alc` clips and the `.als` come from key/BPM
+detection; see [Key and BPM detection](#key-and-bpm-detection). All can be
+turned off.
 
 Re-downloading the same song with the **same** genre and quality replaces the
 folder. A **different** genre or quality creates a separate
@@ -155,6 +163,69 @@ atomically (assembled in a hidden temp folder, then moved into place in one
 operation), so Live never sees a half-written folder.
 
 FLAC — the Ultra preset's output format — requires Live 11 or newer.
+
+### Key and BPM detection
+
+Every render is analysed after separation and the result delivered three ways:
+
+| Where | What you get | Read by |
+|-------|--------------|---------|
+| Filename | `vocals_124bpm_Fmin.flac` | You, in Finder and Live's browser |
+| Audio metadata | `BPM`/`INITIALKEY` (FLAC), `TBPM`/`TKEY` (MP3) | Rekordbox, Serato, Mixed In Key, Finder |
+| `<stem>.alc` | A Live Clip that warps the stem to *your* project's tempo | Ableton Live 11/12 |
+| `<folder>.als` | A Live Set already at the detected tempo, one warped track per stem | Ableton Live 11/12 |
+
+Analysing *after* separation is the point: beat tracking on an isolated
+`drums` stem is far more reliable than on a full mix, and the key is taken
+from `bass` + `other` with percussion excluded, which leaves a much cleaner
+chroma. Detection adds a few seconds to a job that already takes minutes.
+
+Open the generated `.als` and Live starts at the detected tempo with each stem
+on its own warped track, so the stems line up with the grid immediately.
+
+To pull stems into a project you already have open, drag the **`.alc`**, not
+the audio file. Live reads no tempo from a filename, a metadata tag or a
+sibling `.als` — dropped a bare audio file, it runs its own estimate on each
+file separately. That estimate is unreliable on anything without strong
+transients, so two stems cut from one song routinely import at two different
+tempos and drift apart. A `.alc` hands Live our warp markers instead: every
+stem from one render carries identical markers, and the clip follows whatever
+tempo the project is already at rather than imposing its own.
+
+This assumes the song starts on a downbeat at 00:00 and holds one tempo
+throughout. A track with a lead-in imports at the right tempo but offset from
+the grid; nudge the clip's start marker once and it stays put.
+
+Tempo is octave-folded into 70–180 BPM by default (`analysis.tempo_min` /
+`analysis.tempo_max`). Detection is a *guess*: `info.json` records a
+confidence for both values, and a low one usually means genuinely ambiguous
+material — rubato playing, or a half/double-time feel that is defensible
+either way. Check `analysis.bpm_confidence` before trusting a number blindly.
+
+Writing Ableton `.asd` sidecars is **not** supported. An `.asd` is a
+serialised object graph with its own type dictionary rather than a flat
+record, and a malformed one makes Live mis-warp silently instead of failing
+loudly. The `.alc` and `.als` carry the same warp markers in a form that can
+be verified, so they are used instead. Centrifugue can still *read* `.asd`
+warp markers (`centrifugue_ableton.read_warp_markers`).
+
+### Analysing folders separated earlier
+
+Folders rendered before detection existed can be backfilled:
+
+```bash
+# every folder in output_dir
+python3 native-host/centrifugue_host.py analyze
+
+# specific folders, or a preview of what would change
+python3 native-host/centrifugue_host.py analyze ~/Music/Ableton/Centrifugue/foo
+python3 native-host/centrifugue_host.py analyze --dry-run
+```
+
+Already-analysed folders are skipped unless you pass `--force`. Re-running is
+safe: the filename suffix is replaced rather than appended, and any `.asd`
+Live wrote is renamed alongside its audio so the analysis is not orphaned.
+`--no-rename`, `--no-tags` and `--no-als` narrow what gets written.
 
 ## `info.json` reference
 
@@ -200,6 +271,17 @@ Keys are always present; unavailable values are `null` rather than omitted.
 | `environment.audio_separator` | string\|null | Installed audio-separator version. |
 | `environment.torch` | string\|null | Installed torch version. |
 | `environment.yt_dlp` | string\|null | yt-dlp version. |
+| `analysis` | object\|null | Present when key/BPM detection ran. |
+| `analysis.bpm` | float\|null | Detected tempo, octave-folded. |
+| `analysis.bpm_confidence` | float | 0–1. Agreement between two independent estimates, scaled by how rhythmic the material is. |
+| `analysis.key` | string\|null | e.g. `Fmin`, `F#maj`. Sharps, never flats. |
+| `analysis.camelot` | string\|null | Camelot wheel notation, e.g. `4A`. |
+| `analysis.mode` | string\|null | `major` or `minor`. |
+| `analysis.key_confidence` | float | 0–1. Margin over the runner-up key. |
+| `analysis.bpm_source` | string\|null | Stem the tempo was read from. |
+| `analysis.key_sources` | string[] | Stems the key was read from. |
+| `analysis.live_set` | string\|null | Generated `.als` filename. |
+| `analysis.live_clips` | array\|null | Generated `.alc` filenames, one per stem. |
 
 ## Features
 
