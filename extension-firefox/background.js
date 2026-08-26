@@ -151,20 +151,20 @@ async function pollProgress() {
         broadcastStatus("downloading", formatProgressMessage(progress), progress.percent);
       } else if (stage === "complete") {
         // Job completed
-        stopProgressPolling();
         updateBadge("complete");
         const successText = progress.video_title
           ? `Stems ready: ${progress.video_title}`
           : "Stems saved to Downloads";
         broadcastStatus("success", successText, 100, true);
         showNotification("Stems Ready", successText);
+        await stopPollingUnlessQueueBusy();
       } else if (stage === "error" || stage === "stale") {
         // Job failed
-        stopProgressPolling();
         updateBadge("error");
         const errorText = progress.error || progress.message || "Processing failed";
         broadcastStatus("error", `Error: ${errorText}`, null, true);
         showNotification("Processing Failed", errorText, true);
+        await stopPollingUnlessQueueBusy();
       }
     }
   } catch (error) {
@@ -181,6 +181,29 @@ function startProgressPolling() {
   // Poll immediately, then every 2 seconds
   pollProgress();
   progressPollInterval = setInterval(pollProgress, 2000);
+}
+
+/**
+ * Stop polling only once the queue has genuinely run dry.
+ *
+ * A finishing worker starts the next queued job itself, so "complete" marks
+ * the end of one song rather than the end of the work. Stopping here would
+ * freeze the badge and the page widget on the finished job while the next one
+ * ran unseen.
+ */
+async function stopPollingUnlessQueueBusy() {
+  try {
+    const response = await sendToNativeHost({ action: "get_queue" });
+    const jobs = (response && response.success && response.jobs) || [];
+    if (jobs.some(job => job.status === "queued" || job.status === "running")) {
+      // Forget the finished job so the next tick broadcasts the new one
+      lastProgress = null;
+      return;
+    }
+  } catch (error) {
+    console.error("Queue check failed:", error);
+  }
+  stopProgressPolling();
 }
 
 /**
