@@ -15,6 +15,24 @@ DEFAULT_CONFIG = {
     "write_info_json": True,
     "cookies_from_browser": "auto",
     "max_paused_jobs": 2,
+    # Key/BPM detection and the Ableton hand-off. Detection is cheap next to
+    # separation (seconds against minutes), so it is on by default; each way
+    # of delivering the result can be turned off independently.
+    "analysis": {
+        "enabled": True,
+        "rename_files": True,
+        "write_tags": True,
+        "write_als": True,
+        # One .alc Live Clip per stem. These are what carries the tempo
+        # when a stem is dragged into an existing Set -- Live reads nothing
+        # from the audio file itself and would otherwise guess per file.
+        "write_alc": True,
+        # .asd writing is not implemented -- see
+        # centrifugue_ableton.describe_asd_support() for why.
+        "write_asd": False,
+        "tempo_min": 70.0,
+        "tempo_max": 180.0,
+    },
 }
 
 
