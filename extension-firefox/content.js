@@ -105,6 +105,11 @@ function injectStyles() {
       transition: opacity 0.2s, transform 0.2s;
       pointer-events: none;
       overflow: hidden;
+      /* Anchored at bottom: 150px and grown upward, so without a ceiling a
+         long queue runs off the top of the viewport */
+      max-height: calc(100vh - 170px);
+      display: flex;
+      flex-direction: column;
     }
     #centrifugue-menu.visible {
       opacity: 1;
@@ -116,6 +121,7 @@ function injectStyles() {
       background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
       padding: 14px 16px;
       color: white;
+      flex: 0 0 auto;
     }
     .centrifugue-menu-title {
       font-weight: 600;
@@ -131,6 +137,12 @@ function injectStyles() {
 
     .centrifugue-menu-body {
       padding: 16px;
+      /* min-height: 0 lets this shrink below its content so it, rather than
+         the menu, is what scrolls */
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
     }
 
     .centrifugue-menu-btn {
@@ -358,6 +370,7 @@ function injectStyles() {
   
   #centrifugue-queue { margin-top: 10px; }
   #centrifugue-queue { color: #fff; }
+  #centrifugue-queue-list { max-height: 180px; overflow-y: auto; scrollbar-width: thin; }
   .centrifugue-queue-row { border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px; margin-bottom: 6px; background: #222; }
   .centrifugue-queue-title { font-size: 11px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .centrifugue-queue-meta { font-size: 10px; color: #bbb; margin-top: 2px; }
