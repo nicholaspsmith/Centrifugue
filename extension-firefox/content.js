@@ -11,6 +11,10 @@ let selectedQuality = "fast";
 let selectedGenre = "full";
 let isMenuOpen = false;
 let currentVideoUrl = null;
+// A conversion is running in the native host
+let jobActive = false;
+// A start/queue request is in flight, so a second click would double-submit
+let submitting = false;
 
 // Check if we're on a YouTube video page
 function isVideoPage() {
@@ -460,7 +464,7 @@ function createMenu() {
 
         <button class="centrifugue-menu-btn" id="centrifugue-stems-btn">
           <span>🎛️</span>
-          Download Stems
+          <span id="centrifugue-stems-label">Download Stems</span>
         </button>
       </div>
     </div>
@@ -539,10 +543,16 @@ async function checkActiveJob() {
   try {
     const response = await browser.runtime.sendMessage({ action: "get_progress" });
 
-    if (response.stage && ["downloading", "processing", "finalizing"].includes(response.stage)) {
+    const running = Boolean(response.stage &&
+      ["downloading", "processing", "finalizing"].includes(response.stage));
+    setButtonsDisabled(running);
+    if (running) {
+      // showProgressInMenu refreshes the queue panel itself
       showProgressInMenu(response);
     } else {
       hideProgressInMenu();
+      // Nothing is running, but jobs may still be queued or finished
+      refreshQueuePanel();
     }
   } catch (error) {
     hideProgressInMenu();
@@ -553,13 +563,13 @@ function showProgressInMenu(progress) {
   if (!menuElement) return;
 
   const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
-  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
   const progressTitle = menuElement.querySelector("#centrifugue-progress-title");
   const progressBar = menuElement.querySelector("#centrifugue-progress-bar");
   const progressText = menuElement.querySelector("#centrifugue-progress-text");
 
+  // The download options deliberately stay on screen: that is what lets a
+  // second song be queued behind the one running
   progressContainer.style.display = "block";
-  downloadOptions.style.display = "none";
 
   const title = progress.video_title || "Processing";
   const shortTitle = title.length > 40 ? title.substring(0, 37) + "..." : title;
@@ -597,10 +607,8 @@ function hideProgressInMenu() {
   if (!menuElement) return;
 
   const progressContainer = menuElement.querySelector("#centrifugue-progress-container");
-  const downloadOptions = menuElement.querySelector("#centrifugue-download-options");
 
   if (progressContainer) progressContainer.style.display = "none";
-  if (downloadOptions) downloadOptions.style.display = "block";
 
   // Reset floating button
   if (floatingButton) {
@@ -610,13 +618,30 @@ function hideProgressInMenu() {
 }
 
 function setButtonsDisabled(disabled) {
+  jobActive = disabled;
+  syncMenuButtons();
+}
+
+/**
+ * Reflect the current state on the menu buttons.
+ *
+ * The stems button stays clickable while a job runs: the native host appends
+ * the request to its queue instead of rejecting it. Only the label changes, so
+ * the button always says what pressing it will actually do. MP3 has no queue
+ * behind it, so it still waits its turn.
+ */
+function syncMenuButtons() {
   if (!menuElement) return;
 
   const mp3Btn = menuElement.querySelector("#centrifugue-mp3-btn");
   const stemsBtn = menuElement.querySelector("#centrifugue-stems-btn");
+  const stemsLabel = menuElement.querySelector("#centrifugue-stems-label");
 
-  if (mp3Btn) mp3Btn.disabled = disabled;
-  if (stemsBtn) stemsBtn.disabled = disabled;
+  if (mp3Btn) mp3Btn.disabled = jobActive || submitting;
+  if (stemsBtn) stemsBtn.disabled = submitting;
+  if (stemsLabel) {
+    stemsLabel.textContent = jobActive ? "Add to Queue" : "Download Stems";
+  }
 }
 
 async function downloadMP3() {
@@ -654,9 +679,13 @@ async function downloadStems() {
     showStatus("No YouTube video found", "error");
     return;
   }
+  if (submitting) return;
 
-  setButtonsDisabled(true);
-  showStatus("Starting stem separation...", "downloading");
+  submitting = true;
+  syncMenuButtons();
+  const queueing = jobActive;
+  showStatus(queueing ? "Adding to queue..." : "Starting stem separation...",
+             "downloading");
 
   try {
     const response = await browser.runtime.sendMessage({
@@ -667,20 +696,28 @@ async function downloadStems() {
     });
 
     if (response.success) {
-      // Job started, show progress UI
-      showProgressInMenu({
-        stage: "downloading",
-        video_title: response.video_title,
-        percent: 0
-      });
+      if (response.queued) {
+        // Another job holds the slot. Leave its progress display alone -- this
+        // one is only waiting, and the queue panel shows where it sits.
+        showStatus(`Queued: ${response.video_title || "stems"}`, "success", true);
+        refreshQueuePanel();
+      } else {
+        setButtonsDisabled(true);
+        showProgressInMenu({
+          stage: "downloading",
+          video_title: response.video_title,
+          percent: 0
+        });
+      }
     } else {
       showStatus(`Error: ${response.error}`, "error", true);
-      setButtonsDisabled(false);
     }
   } catch (error) {
     console.error("Stems download error:", error);
     showStatus(`Error: ${error.message}`, "error", true);
-    setButtonsDisabled(false);
+  } finally {
+    submitting = false;
+    syncMenuButtons();
   }
 }
 
