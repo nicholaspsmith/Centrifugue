@@ -7,6 +7,13 @@ let currentUrl = null;
 let selectedQuality = "fast";
 let selectedGenre = "full";
 let statusPollInterval = null;
+// A conversion is running in the native host
+let jobActive = false;
+// A start/queue request is in flight, so a second click would double-submit
+let submitting = false;
+// Keeps a just-queued confirmation on screen instead of letting the progress
+// poller overwrite it on its next tick
+let noticeUntil = 0;
 
 // Check if we're on a YouTube video page
 async function checkYouTubePage() {
@@ -107,9 +114,30 @@ function updateStatus(message, className) {
 }
 
 function disableButtons(disabled) {
-  document.getElementById("downloadMp3Btn").disabled = disabled;
-  document.getElementById("downloadStemsBtn").disabled = disabled;
-  document.getElementById("cancelBtn").style.display = disabled ? "block" : "none";
+  jobActive = disabled;
+  syncButtons();
+}
+
+/**
+ * Reflect the current state on the buttons.
+ *
+ * The stems button stays clickable while a job runs: the native host appends
+ * the request to its queue instead of rejecting it. Only the label changes, so
+ * the button always says what pressing it will actually do. MP3 has no queue
+ * behind it, so it still waits its turn.
+ */
+function syncButtons() {
+  document.getElementById("downloadMp3Btn").disabled = jobActive || submitting;
+  document.getElementById("downloadStemsBtn").disabled = submitting;
+  document.getElementById("stemsBtnLabel").textContent =
+    jobActive ? "Add to Queue" : "Download Stems";
+  document.getElementById("cancelBtn").style.display = jobActive ? "block" : "none";
+}
+
+/** Show a message that survives a few progress ticks before it is replaced. */
+function showNotice(message, className) {
+  updateStatus(message, className);
+  noticeUntil = Date.now() + 4000;
 }
 
 // Genre selection handling
@@ -154,7 +182,7 @@ function startStatusPolling() {
         statusPollInterval = null;
         disableButtons(false);
         updateStatus("Ready to download", "");
-      } else {
+      } else if (Date.now() >= noticeUntil) {
         displayProgress(response);
       }
     } catch (error) {
@@ -196,9 +224,13 @@ async function downloadStems() {
     updateStatus("No YouTube URL found", "error");
     return;
   }
+  if (submitting) return;
 
-  disableButtons(true);
-  updateStatus("Starting stem separation...", "downloading");
+  submitting = true;
+  syncButtons();
+  const queueing = jobActive;
+  updateStatus(queueing ? "Adding to queue..." : "Starting stem separation...",
+               "downloading");
 
   try {
     const response = await browser.runtime.sendMessage({
@@ -209,17 +241,25 @@ async function downloadStems() {
     });
 
     if (response.success) {
-      // Job started, begin polling
-      updateStatus(`Processing: ${response.video_title || "stems"}...`, "downloading");
-      startStatusPolling();
+      if (response.queued) {
+        // Another job holds the slot. Leave its progress display alone -- this
+        // one is only waiting, and the queue panel below shows where it sits.
+        showNotice(`Queued: ${response.video_title || "stems"}`, "success");
+      } else {
+        updateStatus(`Processing: ${response.video_title || "stems"}...`, "downloading");
+        disableButtons(true);
+        startStatusPolling();
+      }
+      refreshQueue();
     } else {
       updateStatus(`Error: ${response.error}`, "error");
-      disableButtons(false);
     }
   } catch (error) {
     console.error("Stems error:", error);
     updateStatus(`Error: ${error.message}`, "error");
-    disableButtons(false);
+  } finally {
+    submitting = false;
+    syncButtons();
   }
 }
 
@@ -290,6 +330,17 @@ async function refreshQueue() {
   if (!response || !response.success || !list) return;
 
   const jobs = response.jobs || [];
+
+  // The queue is the authority on whether anything is running. The single-job
+  // progress file goes quiet between one job finishing and the next starting,
+  // so relying on it alone would leave the buttons stale mid-queue.
+  const running = jobs.some(j => j.status === "running");
+  if (running !== jobActive) {
+    jobActive = running;
+    syncButtons();
+    if (running) startStatusPolling();
+  }
+
   const pending = jobs.filter(j => j.status === "queued").length;
   count.textContent = pending ? `(${pending} waiting)` : "";
 
