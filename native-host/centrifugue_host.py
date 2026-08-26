@@ -28,6 +28,7 @@ from centrifugue_config import (load_config, save_config, get_output_dir,
                                 parse_folder_choice)
 from centrifugue_naming import slugify, resolve_output_folder, publish_folder
 from centrifugue_info import build_info, probe_environment
+import centrifugue_postprocess as postprocess
 from centrifugue_cookies import resolve_cookie_spec, find_profiles, score_profile
 import centrifugue_queue as jobq
 
@@ -648,6 +649,78 @@ def run_roformer_stage(audio_file, output_dir, progress_cb):
         return None
 
 
+def analyse_stem_folder(folder, config, ffmpeg=None, ffprobe=None,
+                       final_folder=None, log=log_debug):
+    """Detect key/BPM for a folder of stems and deliver the result.
+
+    Returns the analysis dict, or None when analysis is off or produced
+    nothing. Delivery is deliberately layered so a partial failure still
+    leaves the user better off than before: filenames first (they work
+    everywhere), then tags, then the Live Set.
+    """
+    settings = config.get('analysis') or {}
+    if not settings.get('enabled', True):
+        return None
+
+    stems = postprocess.find_stems(folder)
+    if not stems:
+        return None
+
+    bpm_source, key_sources = postprocess.pick_sources(stems)
+    analysis = postprocess.run_analysis(
+        DEMUCS_PYTHON, bpm_source, key_sources,
+        tempo_range=(settings.get('tempo_min', 70.0),
+                     settings.get('tempo_max', 180.0)),
+        log=log)
+    if not analysis:
+        return None
+
+    bpm = analysis.get('bpm')
+    key = analysis.get('key')
+    if bpm is None and key is None:
+        return analysis
+
+    analysis['bpm_source'] = Path(bpm_source).name if bpm_source else None
+    analysis['key_sources'] = [Path(p).name for p in (key_sources or [])]
+
+    if settings.get('rename_files', True):
+        planned = postprocess.plan_renames(list(stems.values()), bpm, key)
+        renamed = postprocess.apply_renames(planned, log=log)
+        if renamed:
+            stems = postprocess.find_stems(folder)
+            analysis['renamed'] = {s.name: t.name for s, t in renamed.items()}
+
+    if settings.get('write_tags', True):
+        binary = ffmpeg or find_ffmpeg()
+        if binary:
+            for path in stems.values():
+                postprocess.write_tags(path, bpm, key, analysis.get('camelot'),
+                                       ffmpeg=binary, log=log)
+        else:
+            log('ffmpeg not found; skipping metadata tags')
+
+    if settings.get('write_als', True) and bpm:
+        written = postprocess.write_live_set(
+            folder, stems, bpm, key=key, ffprobe=ffprobe or find_ffprobe(),
+            log=log, final_folder=final_folder)
+        if written:
+            analysis['live_set'] = written.name
+
+    if settings.get('write_alc', True) and bpm:
+        clips = postprocess.write_live_clips(
+            folder, stems, bpm, key=key, ffprobe=ffprobe or find_ffprobe(),
+            log=log, final_folder=final_folder)
+        if clips:
+            analysis['live_clips'] = clips
+
+    if settings.get('write_asd', False):
+        import centrifugue_ableton as ableton
+        log('write_asd requested but unsupported:\n' + ableton.describe_asd_support())
+        analysis['asd'] = 'unsupported'
+
+    return analysis
+
+
 def run_stem_separation_background(job_id, url, quality, genre, title):
     """Run stem separation as independent worker process with real-time progress parsing"""
     global active_process
@@ -920,6 +993,23 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                           action='download_stems', quality=quality, genre=genre)
             return
 
+        analysis = None
+        try:
+            write_progress('finalizing', 'Detecting key and BPM...', percent=95,
+                          job_id=job_id, video_title=title, action='download_stems',
+                          quality=quality, genre=genre)
+            analysis = analyse_stem_folder(staging, config, final_folder=target)
+        except Exception as exc:
+            # Analysis is a bonus on top of the stems; never lose a finished
+            # render because a detector fell over.
+            log_debug(f'analysis failed: {exc}')
+
+        if analysis and analysis.get('renamed'):
+            renamed = analysis['renamed']
+            for entry in copied_files:
+                if entry['filename'] in renamed:
+                    entry['filename'] = renamed[entry['filename']]
+
         if config.get('write_info_json', True):
             ext = Path(copied_files[0]['filename']).suffix.lstrip('.')
             info = build_info(
@@ -940,6 +1030,19 @@ def run_stem_separation_background(job_id, url, quality, genre, title):
                         'total_seconds': round(time.time() - started_epoch, 2)},
                 environment=probe_environment(venv_python=DEMUCS_PYTHON),
             )
+            if analysis:
+                info['analysis'] = {
+                    'bpm': analysis.get('bpm'),
+                    'bpm_confidence': analysis.get('bpm_confidence'),
+                    'key': analysis.get('key'),
+                    'camelot': analysis.get('camelot'),
+                    'mode': analysis.get('mode'),
+                    'key_confidence': analysis.get('key_confidence'),
+                    'bpm_source': analysis.get('bpm_source'),
+                    'key_sources': analysis.get('key_sources'),
+                    'live_set': analysis.get('live_set'),
+                    'live_clips': analysis.get('live_clips'),
+                }
             (staging / 'info.json').write_text(json.dumps(info, indent=2) + '\n')
 
         publish_folder(staging, target, overwrite)
@@ -1162,6 +1265,110 @@ def run_worker_mode(args):
         pass
 
 
+def run_analyze_mode(args):
+    """`centrifugue_host.py analyze <folder>...` -- backfill existing renders.
+
+    Folders separated before key/BPM detection existed get the same
+    treatment a fresh render would receive. Re-running is safe: the filename
+    suffix is replaced rather than appended, so a folder can be re-analysed
+    after a settings change without accumulating tails.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog='centrifugue_host.py analyze',
+        description='Detect key and BPM for already-separated stem folders.')
+    parser.add_argument('folders', nargs='*',
+                        help='stem folders (default: every folder in output_dir)')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='report what would change without touching anything')
+    parser.add_argument('--no-rename', action='store_true')
+    parser.add_argument('--no-tags', action='store_true')
+    parser.add_argument('--no-als', action='store_true')
+    parser.add_argument('--no-alc', action='store_true')
+    parser.add_argument('--force', action='store_true',
+                        help='re-analyse folders that already have results')
+    parsed = parser.parse_args(args)
+
+    config = load_config()
+    settings = dict(config.get('analysis') or {})
+    settings['enabled'] = True
+    if parsed.no_rename:
+        settings['rename_files'] = False
+    if parsed.no_tags:
+        settings['write_tags'] = False
+    if parsed.no_als:
+        settings['write_als'] = False
+    if parsed.no_alc:
+        settings['write_alc'] = False
+
+    if parsed.folders:
+        folders = [Path(os.path.expanduser(f)) for f in parsed.folders]
+    else:
+        folders = sorted(f for f in get_download_dir().iterdir() if f.is_dir())
+
+    ffmpeg, ffprobe = find_ffmpeg(), find_ffprobe()
+    analysed = skipped = failed = 0
+
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        stems = postprocess.find_stems(folder)
+        if not stems:
+            continue
+
+        if not parsed.force:
+            try:
+                existing = json.loads((folder / 'info.json').read_text())
+                if isinstance(existing, dict) and existing.get('analysis', {}).get('bpm'):
+                    print(f'  --  {folder.name}: already analysed (use --force)')
+                    skipped += 1
+                    continue
+            except (OSError, ValueError, AttributeError):
+                pass
+
+        if parsed.dry_run:
+            bpm_source, key_sources = postprocess.pick_sources(stems)
+            print(f'  ?   {folder.name}: would analyse '
+                  f'bpm<-{Path(bpm_source).name if bpm_source else "-"} '
+                  f'key<-{",".join(Path(p).name for p in key_sources) or "-"}')
+            continue
+
+        try:
+            analysis = analyse_stem_folder(
+                folder, {'analysis': settings}, ffmpeg=ffmpeg, ffprobe=ffprobe,
+                log=lambda message: print(f'      {message}'))
+        except Exception as exc:
+            print(f'  !!  {folder.name}: {exc}')
+            failed += 1
+            continue
+
+        if not analysis or (analysis.get('bpm') is None and analysis.get('key') is None):
+            print(f'  !!  {folder.name}: no result')
+            failed += 1
+            continue
+
+        postprocess.update_info(folder, analysis, extras={
+            'bpm_source': analysis.get('bpm_source'),
+            'key_sources': analysis.get('key_sources'),
+            'live_set': analysis.get('live_set'),
+            'live_clips': analysis.get('live_clips'),
+        })
+        analysed += 1
+        bpm = analysis.get('bpm')
+        print(f'  OK  {folder.name}: '
+              f'{bpm if bpm is not None else "?"} BPM '
+              f'(conf {analysis.get("bpm_confidence", 0):.2f}), '
+              f'{analysis.get("key") or "?"} / {analysis.get("camelot") or "?"} '
+              f'(conf {analysis.get("key_confidence", 0):.2f})'
+              + (f' -> {analysis["live_set"]}' if analysis.get('live_set') else ''))
+
+    if parsed.dry_run:
+        print('\ndry run: nothing changed')
+    else:
+        print(f'\n{analysed} analysed, {skipped} skipped, {failed} failed')
+    return 0
+
+
 def adopt_legacy_job():
     """One-time import of a pre-queue job so it is not orphaned."""
     if jobq.get_queue_path().exists():
@@ -1179,6 +1386,10 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == '--worker':
         run_worker_mode(sys.argv[1:])
         return
+
+    # Operator-facing CLI, not part of the native messaging protocol
+    if len(sys.argv) > 1 and sys.argv[1] == 'analyze':
+        sys.exit(run_analyze_mode(sys.argv[2:]))
 
     # Check for stale jobs on startup
     adopt_legacy_job()
