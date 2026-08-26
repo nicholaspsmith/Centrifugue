@@ -105,6 +105,13 @@ echo "  Installing audio-separator (BS-RoFormer support)..."
     "torch==2.13.0" "torchaudio==2.11.0" "torchvision==0.28.*" "torchcodec==0.15.*"
 echo "  [OK] audio-separator installed"
 
+# librosa powers key/BPM detection. It already arrives as an audio-separator
+# dependency, but detection must not silently break if that chain ever
+# changes, so declare it directly.
+echo "  Installing librosa (key/BPM detection)..."
+"$VENV_DIR/bin/pip" install --quiet "librosa>=0.10"
+echo "  [OK] librosa installed"
+
 # Pre-download the BS-RoFormer model so the first Ultra run doesn't stall
 MODEL_CACHE_DIR="$SCRIPT_DIR/.cache/audio-separator-models"
 mkdir -p "$MODEL_CACHE_DIR"
