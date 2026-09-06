@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="Centrifugue Logo" width="120" height="120">
+  <img src="docs/mascot.png" alt="Centrifugue mascot: a centrifuge flinging out four audio stems" width="160" height="160">
 </p>
 
 <h1 align="center">Centrifugue</h1>
