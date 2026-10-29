@@ -54,3 +54,8 @@ dist/
 # pytest
 .pytest_cache/
 __pycache__/
+
+# beads local locks / database
+.beads.gate.lock
+.beads/embeddeddolt/
+.beads/embeddeddolt.gate.lock
